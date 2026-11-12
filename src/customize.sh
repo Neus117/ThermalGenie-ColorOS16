@@ -77,5 +77,11 @@ ui_print "- 卸载即恢复：所有改动都是运行时挂载，不写坏固�
 ui_print "- 温度墙解锁：CPU 结温 92→97C、sys-therm 88/90→93/95C（config: THERMAL_UNLOCK）"
 ui_print "- 冷却设备直控：电池<52C 时把 cpu-cluster 降频钉住（config: CDEV_UNLOCK）"
 ui_print "- 温度墙与冷却直控均为 sysfs 运行时写入，重启恢复；默认关闭，本机已在 config 中开启"
+# 升级时保留用户已有的 config.conf（否则温度墙/冷却直控会变回默认关闭）
+OLDCFG=/data/adb/modules/thermal_genie/config.conf
+if [ -f "$OLDCFG" ] && [ -f "$MP/config.conf" ] && [ "$OLDCFG" != "$MP/config.conf" ]; then
+  cp -f "$OLDCFG" "$MP/config.conf"
+  ui_print "- 已保留原有 config.conf（升级不覆盖配置）"
+fi
 ui_print "- 重启后生效"
 exit 0
