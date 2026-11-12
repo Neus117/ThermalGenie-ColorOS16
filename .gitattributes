@@ -1,0 +1,4 @@
+# 所有文本文件统一 LF（脚本要在 Android 上直接执行，CRLF 会报错）
+* text=auto eol=lf
+*.sh text eol=lf
+*.ps1 text eol=crlf
