@@ -1,6 +1,6 @@
 #!/bin/bash
 # v0.7.0 验证：待机会话（熄屏计时 → 亮屏汇总）
-SRC="/d/Coding/workspace/ThermalGenie/src/bin/genie.sh"
+SRC="$(cd "$(dirname "$0")/.." && pwd)/src/bin/genie.sh"
 T=/tmp/tg10
 rm -rf $T; mkdir -p $T/bin $T/logs $T/fakebin
 

@@ -1,6 +1,6 @@
 #!/bin/bash
 # 离线逻辑验证：把 genie.sh 的 sysfs 路径改到临时目录，跑护栏状态机
-SRC="D:/Coding/workspace/ThermalGenie/src/bin/genie.sh"
+SRC="$(cd "$(dirname "$0")/.." && pwd)/src/bin/genie.sh"
 T=/tmp/tg
 rm -rf $T; mkdir -p $T/bin $T/logs
 

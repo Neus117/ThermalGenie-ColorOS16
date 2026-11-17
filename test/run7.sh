@@ -1,6 +1,6 @@
 #!/bin/bash
 # v0.6.1 验证：功率换算（cur mA × v µV）、放电样本不计入、汇总格式
-SRC="D:/Coding/workspace/ThermalGenie/src/bin/genie.sh"
+SRC="$(cd "$(dirname "$0")/.." && pwd)/src/bin/genie.sh"
 T=/tmp/tg7
 rm -rf $T; mkdir -p $T/bin $T/logs
 

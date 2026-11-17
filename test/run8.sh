@@ -1,7 +1,7 @@
 #!/bin/bash
 # v0.6.3 验证：TICK 校验 + 写回校验（SPOOF-FAIL）
 # 注意：不能替换 loop 里的 sleep，否则测不出 TICK 是否生效
-SRC="/d/Coding/workspace/ThermalGenie/src/bin/genie.sh"
+SRC="$(cd "$(dirname "$0")/.." && pwd)/src/bin/genie.sh"
 T=/tmp/tg9
 setup() {
   rm -rf $T; mkdir -p $T/bin $T/logs

@@ -1,6 +1,6 @@
 #!/bin/bash
 # v0.7.0 验证：自适应节拍（冷 -> slow 1s，热 -> fast 0.2s）
-SRC="/d/Coding/workspace/ThermalGenie/src/bin/genie.sh"
+SRC="$(cd "$(dirname "$0")/.." && pwd)/src/bin/genie.sh"
 T=/tmp/tg11
 rm -rf $T; mkdir -p $T/bin $T/logs
 sed -e "s#^PS=/proc/shell-temp#PS=$T/ps#" \

@@ -10,6 +10,14 @@ VER=$(sed -n 's/^version=//p' "$MP/module.prop" 2>/dev/null | head -n1)
 [ -f "$MP/bin/genie.sh" ] || { ui_print "- 缺少 bin/genie.sh，安装中止"; exit 1; }
 [ -f "$MP/config.conf" ]  || { ui_print "- 缺少 config.conf，安装中止"; exit 1; }
 
+# 升级时先把用户已有的 config.conf 覆盖进来（保住温度墙/冷却直控/护栏等手改值），
+# 必须在下面写音量键选择之前做，否则 cp 会把刚写入的 FPS_UNLOCK/RATE_UNLOCK 冲掉。
+OLDCFG=/data/adb/modules/thermal_genie/config.conf
+if [ -f "$OLDCFG" ] && [ -f "$MP/config.conf" ] && [ "$OLDCFG" != "$MP/config.conf" ]; then
+  cp -f "$OLDCFG" "$MP/config.conf"
+  ui_print "- 已保留原有 config.conf（升级不覆盖配置）"
+fi
+
 ui_print " "
 ui_print "==================== Thermal Genie $VER ===================="
 ui_print "是否解锁游戏帧率？"
@@ -76,12 +84,6 @@ ui_print "- 配置：/data/adb/modules/thermal_genie/config.conf（改完 10 秒
 ui_print "- 卸载即恢复：所有改动都是运行时挂载，不写坏固件文件"
 ui_print "- 温度墙解锁：CPU 结温 92→97C、sys-therm 88/90→93/95C（config: THERMAL_UNLOCK）"
 ui_print "- 冷却设备直控：电池<52C 时把 cpu-cluster 降频钉住（config: CDEV_UNLOCK）"
-ui_print "- 温度墙与冷却直控均为 sysfs 运行时写入，重启恢复；默认关闭，本机已在 config 中开启"
-# 升级时保留用户已有的 config.conf（否则温度墙/冷却直控会变回默认关闭）
-OLDCFG=/data/adb/modules/thermal_genie/config.conf
-if [ -f "$OLDCFG" ] && [ -f "$MP/config.conf" ] && [ "$OLDCFG" != "$MP/config.conf" ]; then
-  cp -f "$OLDCFG" "$MP/config.conf"
-  ui_print "- 已保留原有 config.conf（升级不覆盖配置）"
-fi
+ui_print "- 温度墙与冷却直控均为 sysfs 运行时写入，重启恢复；默认关闭，需在 config.conf 里开启"
 ui_print "- 重启后生效"
 exit 0

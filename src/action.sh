@@ -12,7 +12,13 @@ CAPS=$(grep "CAPS" "$MD/logs/genie.log" 2>/dev/null | tail -1)
 echo "数据源     : ${CAPS#*] }"
 echo "壳温上报   : $(cat /proc/shell-temp 2>/dev/null)"
 echo "电池温度   : $(cat $NB/temp 2>/dev/null)"
-echo "电池功率   : $(cat $NB/power_now 2>/dev/null) µW"
+# 功率现算：驱动按单芯上报，power_now 与 cur×v 差 1000 倍，弃用
+CUR=$(cat $NB/current_now 2>/dev/null)
+VOL=$(cat $NB/voltage_now 2>/dev/null)
+MAC=${CUR#-}
+PW="?"
+if [ -n "$MAC" ] && [ -n "$VOL" ]; then PW=$((MAC * VOL / 1000000))mW; fi
+echo "电池功率   : ${PW}（单芯视在，整包约 ×2）"
 echo "充电状态   : $(cat $NB/status 2>/dev/null)"
 echo "cool_down  : $(cat /sys/class/oplus_chg/battery/cool_down 2>/dev/null)"
 echo "守护进程   : $(pgrep -f 'thermal_genie/bin/[g]enie.sh' | tr '\n' ' ')"

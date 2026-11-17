@@ -1,6 +1,6 @@
 #!/bin/bash
 # v0.6 离线验证：充电会话开始/采样/汇总 + 护栏 + 状态机
-SRC="D:/Coding/workspace/ThermalGenie/src/bin/genie.sh"
+SRC="$(cd "$(dirname "$0")/.." && pwd)/src/bin/genie.sh"
 T=/tmp/tg6
 rm -rf $T; mkdir -p $T/bin $T/logs
 

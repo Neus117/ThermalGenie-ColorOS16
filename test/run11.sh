@@ -1,6 +1,6 @@
 #!/bin/bash
 # v0.8.x 健壮性：模拟真机电源数据源，验证待机会话字段完整
-SRC="/d/Coding/workspace/ThermalGenie/src/bin/genie.sh"
+SRC="$(cd "$(dirname "$0")/.." && pwd)/src/bin/genie.sh"
 T=/tmp/tg12
 
 setup() {

@@ -1,6 +1,6 @@
 #!/bin/bash
 # v0.4 离线逻辑验证：双档护栏（充电 48/43、游戏 52/47）+ 诱骗 + cool_down
-SRC="D:/Coding/workspace/ThermalGenie/src/bin/genie.sh"
+SRC="$(cd "$(dirname "$0")/.." && pwd)/src/bin/genie.sh"
 T=/tmp/tg4
 rm -rf $T; mkdir -p $T/bin $T/logs
 
