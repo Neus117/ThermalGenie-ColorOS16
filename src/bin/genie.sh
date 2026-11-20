@@ -103,6 +103,20 @@ PWS=/sys/kernel/debug/wakeup_sources
 PDBG=/sys/kernel/debug
 UPTIME=/proc/uptime
 
+# ---- 运行期不变的节点列表：启动时扫一次，之后不再每轮遍历全部 zone / 冷却设备 ----
+TZONES=""
+for z in "$CDIR"/thermal_zone*; do
+  case $(cat "$z/type" 2>/dev/null) in
+    cpu-*|sys-therm-*) TZONES="$TZONES $z" ;;
+  esac
+done
+CDEVS=""
+CDEVPATHS=""
+for c in "$CDIR"/cooling_device*; do
+  t=$(cat "$c/type" 2>/dev/null)
+  case "$t" in *cluster*) CDEVS="$CDEVS $c|$t"; CDEVPATHS="$CDEVPATHS $c/cur_state" ;; esac
+done
+
 # ---- 单实例锁 ----
 LK=/data/local/tmp/.thermal_genie.lock
 if ! mkdir "$LK" 2>/dev/null; then
@@ -131,14 +145,12 @@ today() { date +%Y%m%d; }
 therm_fix() {
   [ "${THERMAL_UNLOCK:-0}" = 1 ] || return 0
   tn=0
-  for tz in /sys/class/thermal/thermal_zone*; do
-    tty=$(cat "$tz/type" 2>/dev/null)
-    case "$tty" in cpu-*|sys-therm-*) ;; *) continue ;; esac
-    ti=0
-    while [ "$ti" -lt 8 ]; do
-      tf="$tz/trip_point_${ti}_temp"
-      tv=$(cat "$tf" 2>/dev/null)
-      ti=$((ti + 1))
+  for tz in $TZONES; do
+    # 一个 awk 读完这个 zone 的全部 trip（原来每个 trip 一次 cat = 8 次 fork）
+    for pair in $(awk 'FNR==1{print FILENAME "=" $1}' "$tz"/trip_point_*_temp 2>/dev/null); do
+      tf=${pair%%=*}
+      tv=${pair#*=}
+      case "$tf" in *trip_point_[0-7]_temp) ;; *) continue ;; esac
       case "$tv" in ''|*[!0-9]*) continue ;; esac
       if [ "$tv" -lt 85000 ] || [ "$tv" -gt 92000 ]; then continue; fi
       tnv=$((tv + ${THERMAL_DELTA:-5000}))
@@ -154,9 +166,13 @@ therm_fix() {
 # 注意：这是绕过内核温控的最后一步，只在 THERMAL_UNLOCK=1 且 CDEV_UNLOCK=1 时启用
 cdev_pin() {
   [ "${CDEV_UNLOCK:-0}" = 1 ] || return 0
+  # 先把电池温度参数存下来：下面的 set -- 会覆盖位置参数
+  tbv=$1
   # 芯片级保险：结温到 96℃ 就交回系统，避免撞到 100℃ 的 hot trip（紧急关机）
-  zt1=$(cat "$ZCPU" 2>/dev/null)
-  zt2=$(cat "$ZCPUSS" 2>/dev/null)
+  # 两个结温节点一次读完（原来两次 cat）
+  set -- $(awk 'FNR==1{print $1}' "$ZCPU" "$ZCPUSS" 2>/dev/null)
+  zt1=${1:-0}
+  zt2=${2:-0}
   case "$zt1" in ''|*[!0-9]*) zt1=0 ;; esac
   case "$zt2" in ''|*[!0-9]*) zt2=0 ;; esac
   if [ "$zt1" -ge 96000 ] || [ "$zt2" -ge 96000 ]; then
@@ -166,25 +182,28 @@ cdev_pin() {
     fi
     return 0
   fi
-  if [ "$1" -ge "${CDEV_GUARD:-520}" ]; then
+  if [ "$tbv" -ge "${CDEV_GUARD:-520}" ]; then
     if [ "$cd_pinned" = 1 ]; then
-      log "CDEV-RELEASE tb=$1 >= guard=${CDEV_GUARD:-520}，交回系统"
+      log "CDEV-RELEASE tb=$tbv >= guard=${CDEV_GUARD:-520}，交回系统"
       cd_pinned=0
     fi
     return 0
   fi
-  for cd in "$CDIR"/cooling_device*; do
-    cty=$(cat "$cd/type" 2>/dev/null)
-    case "$cty" in cpu-cluster*) ;; *) continue ;; esac
-    cs=$(cat "$cd/cur_state" 2>/dev/null)
+  # 冷却设备状态一次读完（原来每个设备一次 cat，30 个设备就是 30 次 fork）
+  for pair in $(awk 'FNR==1{print FILENAME "=" $1}' $CDEVPATHS 2>/dev/null); do
+    csfile=${pair%%=*}
+    cs=${pair#*=}
     [ "$cs" = "0" ] && continue
-    echo 0 > "$cd/cur_state" 2>/dev/null
-    cn=$(cat "$cd/cur_state" 2>/dev/null)
-    if [ "$cn" = "0" ]; then
-      if [ "$cd_pinned" != 1 ]; then
-        log "CDEV-PIN $cty $cs -> 0 (tb=$1)"
-        cd_pinned=1
-      fi
+    cdir=${csfile%/cur_state}
+    echo 0 > "$csfile" 2>/dev/null
+    cn=$(cat "$csfile" 2>/dev/null)
+    if [ "$cn" = "0" ] && [ "$cd_pinned" != 1 ]; then
+      cty=""
+      for ci in $CDEVS; do
+        case "$ci" in "$cdir|"*) cty=${ci##*|}; break ;; esac
+      done
+      log "CDEV-PIN ${cty:-$cdir} $cs -> 0 (tb=$tbv)"
+      cd_pinned=1
     fi
   done
 }
@@ -309,7 +328,10 @@ i=0
 while :; do
   i=$((i + 1))
   epoch=$(date +%s)
-  echo "$epoch" > "$MD/.hb.tmp" 2>/dev/null && mv -f "$MD/.hb.tmp" "$MD/.hb" 2>/dev/null
+  # 心跳每 5 轮写一次（慢档 2 秒节拍 = 10 秒一次；看门狗阈值 150 秒），省掉每轮的 mv
+  if [ $((i % 5)) -eq 1 ]; then
+    echo "$epoch" > "$MD/.hb.tmp" 2>/dev/null && mv -f "$MD/.hb.tmp" "$MD/.hb" 2>/dev/null
+  fi
 
   if [ $((i % 50)) -eq 0 ] && [ -f "$CF" ]; then
     . "$CF"
@@ -331,9 +353,16 @@ while :; do
     SBD="$LD/standby-$DAY.log"
   fi
 
-  tb=$(cat "$NTB" 2>/dev/null)
+  # 一次 awk 读两个节点（原来两次 cat = 两次 fork）
+  if [ -r "$NTB" ] && [ -r "$NST" ]; then
+    set -- $(awk '{a[NR]=$1} END{print a[1], a[2]}' "$NTB" "$NST" 2>/dev/null)
+    tb=${1:-}
+    st=${2:-}
+  else
+    tb=$(cat "$NTB" 2>/dev/null)
+    st=$(cat "$NST" 2>/dev/null)
+  fi
   case "$tb" in ''|*[!0-9]*) tb=0 ;; esac
-  st=$(cat "$NST" 2>/dev/null)
 
   # ---- 补账：熄屏后设备先 suspend，进程还没采样到「熄屏」就被冻结了 ----
   # 醒来时 now - 上次遥测 这段空档必然是挂起（屏幕灭着），按电量差补一条 src=gap。
@@ -511,7 +540,10 @@ guarded=0; guarded_mode=""
       echo "THR $(date +%T) m7=$m7 tb=$tb z2=$z2 z22=$z22 z75=$z75 gpu=$gpu gmax=$gmax cds=$cdsum sh=$(cat "$PS" 2>/dev/null) sp=$now" >> "$TEL"
       last_m7=$m7
     fi
-    [ "$(wc -c < "$TEL" 2>/dev/null || echo 0)" -gt 1048576 ] && mv -f "$TEL" "$TEL.1"
+    # 轮转检查不必每轮做：每 5 个遥测周期看一次大小就够
+    if [ $((i % (TELE_MOD * 5))) -eq 0 ]; then
+      [ "$(wc -c < "$TEL" 2>/dev/null || echo 0)" -gt 1048576 ] && mv -f "$TEL" "$TEL.1"
+    fi
 
     if [ "$sb_active" = 1 ] && [ -z "$sb_idle" ]; then
       if [ $(( $(date +%s) - sb_start )) -ge 60 ]; then
