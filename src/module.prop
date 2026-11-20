@@ -1,6 +1,6 @@
 id=thermal_genie
 name=Thermal Genie for ColorOS 16
-version=v1.0.3
-versionCode=103
+version=v1.0.4
+versionCode=104
 author=Neus117
-description=壳温诱骗、充电降温解锁、游戏帧率解锁、统一 52℃ 护栏；温度墙解锁（10 个 CPU 核 97℃）与冷却设备直控默认关闭，需在 config.conf 打开。自动记录充电功率、待机会话与降频事件。全部为运行时写入，不改固件文件；卸载即恢复原状。
+description=壳温诱骗、充电降温解锁、游戏帧率解锁、统一 52℃ 护栏；自动记录充电功率、待机会话与降频事件。全部为运行时写入，不改固件文件；卸载即恢复原状。 当前：帧率解锁 开；温度墙解锁 关；冷却直控 关。

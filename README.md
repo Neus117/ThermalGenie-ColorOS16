@@ -41,13 +41,16 @@ ThermalGenie-ColorOS16\
 ├── build.ps1              从 src\ 打包到 dist\，版本号取自 module.prop
 ├── src\                   模块源码，打包后内容直接作为 zip 根
 │   ├── module.prop        模块信息（id / name / version 唯一来源）
-│   ├── customize.sh       安装：音量键选帧率解锁 + 设权限 + 保留旧 config
+│   ├── customize.sh       安装：两个音量键选项 + 设权限 + 保留旧 config 与 logs
 │   ├── post-fs-data.sh    开机早期：生成并挂载帧率补丁
 │   ├── service.sh         开机后：校验补挂补丁、应用温度墙、拉起并监护守护进程
 │   ├── action.sh          管理器「动作」按钮：只读状态
 │   ├── uninstall.sh       卸载：停进程、解除 bind mount、清锁
 │   ├── config.conf        全部可调参数
-│   └── bin\genie.sh       守护进程：诱骗 / 护栏 / 采集 / 温度墙复核 / 冷却直控
+│   ├── desc.base          管理器卡片的基础文案（状态由 bin/desc.sh 拼上去）
+│   └── bin\
+│       ├── genie.sh       守护进程：诱骗 / 护栏 / 采集 / 温度墙复核 / 冷却直控
+│       └── desc.sh        按 config.conf 的实际值重写 module.prop 的 description
 ├── test\                  离线验证（把 sysfs 路径重定向到临时目录）
 └── dist\                  构建产物，不入库
 ```
@@ -78,6 +81,8 @@ pwsh -File .\build.ps1
 4. 重启
 
 升级安装会保留手机上的 `config.conf`（温度墙、冷却直控、护栏阈值这些手改值不会被打回默认）和 `logs/*.log`（换模块目录会把整个目录换掉，不带上就全没了）；重复的键会被收敛成一行。
+
+管理器卡片底部那句话是**按当前状态生成**的（「当前：帧率解锁 …；温度墙解锁 …；冷却直控 …」）：装机时按你刚才的选择写一次，之后每次开机再按 `config.conf` 刷新一次——手改配置再重启，卡片会跟着变。
 
 ## 配置
 
@@ -228,3 +233,4 @@ bash run8.sh
 | v1.0.1 | 待机会话不再丢账：状态每轮落盘到 `.sbstate`，守护进程被看门狗重启后接着算（`resume=1`）；设备先挂起、进程没赶上「熄屏」那一刻时，醒来按挂起时长补记一条（`src=gap`，`SB_GAP_MIN`） |
 | v1.0.2 | 升级安装把旧 `logs/*.log` 一起带过来（此前换模块目录会把几天几周的待机与遥测记录删干净）；跨重启的待机会话不再续算（日志记 `STANDBY-DROP pre-boot`）；电量不降反升时 `rate` 写 `n/a`（此前会写出 `-4.-99%/h` 这种坏值）；`post-fs.log` 每行加 `up=秒数` |
 | v1.0.3 | 安装时多问一句「温度墙解锁 + 冷却设备直控」：音量+ 打开、音量− 关闭、不按保持当前设置（升级不会被默认值改写）；音量键选择不再覆盖用户手改的值；`config.conf` 末行补了换行，重复键收敛成一行 |
+| v1.0.4 | 管理器卡片的描述改成按实际状态生成（装机时按选择写一次、每次开机按 `config.conf` 刷新），不再写死「默认关闭」；新增 `desc.base` 与 `bin/desc.sh` |

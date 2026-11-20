@@ -99,7 +99,11 @@ case "$sel" in
     ;;
 esac
 
-chmod 0755 "$MP/bin/genie.sh" "$MP/service.sh" "$MP/action.sh" "$MP/uninstall.sh" "$MP/customize.sh" "$MP/post-fs-data.sh" 2>/dev/null
+# 管理器卡片只认 module.prop 的 description，那里是静态文案；
+# 按刚才的选择（以及保留下来的旧配置）重写一句「当前：…」，别让卡片和实际状态打架
+sh "$MP/bin/desc.sh" 2>/dev/null
+
+chmod 0755 "$MP/bin/genie.sh" "$MP/bin/desc.sh" "$MP/service.sh" "$MP/action.sh" "$MP/uninstall.sh" "$MP/customize.sh" "$MP/post-fs-data.sh" 2>/dev/null
 chmod 0644 "$MP/module.prop" "$CFG" 2>/dev/null
 mkdir -p "$MP/logs" "$MP/work" 2>/dev/null
 chmod 0755 "$MP/logs" "$MP/work" 2>/dev/null

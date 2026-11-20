@@ -1,8 +1,8 @@
 #!/bin/bash
-# v1.0.3 验证：安装时的两个音量键选项
-#   A 全新安装 + 两次音量+：帧率开、温度墙/冷却开
-#   B 升级安装 + 两次音量-：帧率关、温度墙/冷却关，旧日志仍保留，重复键收敛成一行
-#   C 升级安装 + 不按键：保持旧配置（含用户手改的 1/1），不被默认值改写
+# v1.0.4 验证：安装时的两个音量键选项 + 卡片描述跟随实际状态
+#   A 全新安装 + 两次音量+：帧率开、温度墙/冷却开，卡片写「当前：开/开/开」
+#   B 升级安装 + 两次音量-：全都关，旧日志保留，重复键收敛成一行，卡片写「关/关/关」
+#   C 升级安装 + 不按键：保持旧配置（FPS=0、温度墙=1、冷却=1），卡片写「关/开/开」
 SRC="$(cd "$(dirname "$0")/.." && pwd)/src"
 T=/tmp/tg14
 fail=0
@@ -33,41 +33,42 @@ EOF
 
 run() { PATH=$T/fakebin:$PATH MODPATH=$T/new sh $T/new/customize.sh > $T/out.txt 2>&1; }
 
-echo "===== A 全新安装（没有旧配置），两次音量+ ===="
+echo "===== A 全新安装（无旧配置），两次音量+ ====="
 setup
-rm -f $T/old/config.conf  # 全新安装：旧配置不存在
+rm -f $T/old/config.conf
 printf 'up\nup\n' > $T/keys
 run
-sed -n '/1\/2/,/重启后生效/p' $T/out.txt | head -20
-ck "A 帧率解锁写成 1" 'grep -q "^FPS_UNLOCK=1$" $T/new/config.conf'
-ck "A 刷新率解锁写成 1" 'grep -q "^RATE_UNLOCK=1$" $T/new/config.conf'
-ck "A 温度墙写成 1" 'grep -q "^THERMAL_UNLOCK=1$" $T/new/config.conf'
-ck "A 冷却直控写成 1" 'grep -q "^CDEV_UNLOCK=1$" $T/new/config.conf'
+ck "A 帧率解锁 1"        'grep -q "^FPS_UNLOCK=1$" $T/new/config.conf'
+ck "A 刷新率解锁 1"      'grep -q "^RATE_UNLOCK=1$" $T/new/config.conf'
+ck "A 温度墙 1"          'grep -q "^THERMAL_UNLOCK=1$" $T/new/config.conf'
+ck "A 冷却直控 1"        'grep -q "^CDEV_UNLOCK=1$" $T/new/config.conf'
+ck "A 卡片描述=开/开/开" 'grep -q "当前：帧率解锁 开；温度墙解锁 开；冷却直控 开。" $T/new/module.prop'
 
 echo
-echo "===== B 升级安装（旧配置 0/1/1，且 THERMAL_UNLOCK 重复两行），两次音量- ===="
+echo "===== B 升级安装（旧 0/1/1，THERMAL 重复两行），两次音量- ====="
 setup
 printf 'SHELL_SPOOF=1\nFPS_UNLOCK=0\nRATE_UNLOCK=0\nTHERMAL_UNLOCK=1\nTHERMAL_UNLOCK=1\nCDEV_UNLOCK=1\nGUARD_TRIGGER=520\n' > $T/old/config.conf
 printf '[2026-11-19 20:23:40] standby dur=79s cap=43->43 samples=9 rate=n/a\n' > $T/old/logs/standby.log
 printf 'down\ndown\n' > $T/keys
 run
-ck "B 帧率解锁写成 0" 'grep -q "^FPS_UNLOCK=0$" $T/new/config.conf'
-ck "B 温度墙写成 0" 'grep -q "^THERMAL_UNLOCK=0$" $T/new/config.conf'
-ck "B 冷却直控写成 0" 'grep -q "^CDEV_UNLOCK=0$" $T/new/config.conf'
-ck "B 重复的 THERMAL_UNLOCK 收敛成一行" '[ "$(grep -c "^THERMAL_UNLOCK=" $T/new/config.conf)" = 1 ]'
-ck "B 旧日志被带过来" 'grep -q "dur=79s" $T/new/logs/standby.log'
+ck "B 帧率解锁 0"        'grep -q "^FPS_UNLOCK=0$" $T/new/config.conf'
+ck "B 温度墙 0"          'grep -q "^THERMAL_UNLOCK=0$" $T/new/config.conf'
+ck "B 冷却直控 0"        'grep -q "^CDEV_UNLOCK=0$" $T/new/config.conf'
+ck "B 重复键收敛成一行"  '[ "$(grep -c "^THERMAL_UNLOCK=" $T/new/config.conf)" = 1 ]'
+ck "B 旧日志保留"        'grep -q "dur=79s" $T/new/logs/standby.log'
+ck "B 卡片描述=关/关/关" 'grep -q "当前：帧率解锁 关；温度墙解锁 关；冷却直控 关。" $T/new/module.prop'
 
 echo
-echo "===== C 升级安装（旧配置 FPS=0 / 温度墙=1），不按键 ===="
+echo "===== C 升级安装（旧 FPS=0 / 温度墙=1 / 冷却=1），不按键 ====="
 setup
 printf 'SHELL_SPOOF=1\nFPS_UNLOCK=0\nRATE_UNLOCK=0\nTHERMAL_UNLOCK=1\nCDEV_UNLOCK=1\n' > $T/old/config.conf
 printf 'none\nnone\n' > $T/keys
 run
-sed -n '/1\/2/,/重启后生效/p' $T/out.txt | head -18
-ck "C 不按键 → 帧率保持 0" 'grep -q "^FPS_UNLOCK=0$" $T/new/config.conf'
-ck "C 不按键 → 温度墙保持 1" 'grep -q "^THERMAL_UNLOCK=1$" $T/new/config.conf'
-ck "C 不按键 → 冷却直控保持 1" 'grep -q "^CDEV_UNLOCK=1$" $T/new/config.conf'
-ck "C 提示写的是「保持当前设置」" 'grep -q "保持当前设置" $T/out.txt'
+ck "C 帧率保持 0"        'grep -q "^FPS_UNLOCK=0$" $T/new/config.conf'
+ck "C 温度墙保持 1"      'grep -q "^THERMAL_UNLOCK=1$" $T/new/config.conf'
+ck "C 冷却保持 1"        'grep -q "^CDEV_UNLOCK=1$" $T/new/config.conf'
+ck "C 提示「保持当前设置」" 'grep -q "保持当前设置" $T/out.txt'
+ck "C 卡片描述=关/开/开" 'grep -q "当前：帧率解锁 关；温度墙解锁 开；冷却直控 开。" $T/new/module.prop'
 
 echo
 [ $fail -eq 0 ] && echo "ALL PASS" || echo "HAS FAILURES"

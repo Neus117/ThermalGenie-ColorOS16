@@ -46,7 +46,7 @@ $chk = [System.IO.Compression.ZipFile]::OpenRead($zip)
 try {
     $bad = @($chk.Entries | Where-Object { $_.FullName.Contains('\') })
     if ($bad.Count -gt 0) { throw ('zip 条目里有反斜杠: ' + ($bad.FullName -join ', ')) }
-    $need = @('module.prop', 'customize.sh', 'post-fs-data.sh', 'service.sh', 'action.sh', 'uninstall.sh', 'config.conf', 'bin/genie.sh')
+    $need = @('module.prop', 'desc.base', 'customize.sh', 'post-fs-data.sh', 'service.sh', 'action.sh', 'uninstall.sh', 'config.conf', 'bin/genie.sh', 'bin/desc.sh')
     $have = @($chk.Entries | ForEach-Object { $_.FullName })
     foreach ($n in $need) { if (-not ($have -contains $n)) { throw ("zip 里缺少条目 $n") } }
 } finally { $chk.Dispose() }

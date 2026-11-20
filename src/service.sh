@@ -75,6 +75,8 @@ unlock_thermal() {
   echo "[$(date '+%m-%d %H:%M:%S')] THERMAL-UNLOCK 完成，成功修改 $n 处（delta=+${THERMAL_DELTA}mC cap=${THERMAL_CAP}mC）" >> "$L"
 }
 unlock_thermal
+# 让管理器卡片反映当前的实际开关（module.prop 的 description 是静态的，这里按 config 重写）
+sh "$MD/bin/desc.sh" 2>/dev/null
 # 系统可能在开机后重写 trip 点，隔一段时间复核并按需补写
 (
   sleep 30; unlock_thermal
