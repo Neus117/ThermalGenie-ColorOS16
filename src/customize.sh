@@ -45,23 +45,27 @@ read_vol() {
     return
   fi
   for i in 1 2 3 4 5; do
-    ev=$(timeout 3 getevent -qlc 1 2>/dev/null | awk '/KEY_VOLUME/{print $3; exit}')
+    # 只认「按下」那一下（$4 == DOWN）。一次按键会同时产生 DOWN 和 UP 两条事件，
+    # 以前只匹配键名，结果同一个按压能连答两个问题——第二个问题跟着第一个走。
+    ev=$(timeout 3 getevent -qlc 1 2>/dev/null | awk '/KEY_VOLUME/ && $4=="DOWN" {print $3; exit}')
     case "$ev" in
-      KEY_VOLUMEUP)   echo up;     return ;;
-      KEY_VOLUMEDOWN) echo down;   return ;;
+      KEY_VOLUMEUP)   drain_vol; echo up;     return ;;
+      KEY_VOLUMEDOWN) drain_vol; echo down;   return ;;
     esac
   done
   echo timeout
 }
 
+# 把这次按压剩下的 UP/重复事件读掉，避免下一个问题把它当成新的按键
+drain_vol() {
+  command -v timeout >/dev/null 2>&1 || return 0
+  timeout 1 getevent -qlc 20 >/dev/null 2>&1
+  return 0
+}
+
 ui_print " "
-ui_print "█   █ █████ █   █  ████   ██    ██  █████"
-ui_print "██  █ █     █   █ █        █     █      █"
-ui_print "█ █ █ ████  █   █  ███     █     █     █ "
-ui_print "█  ██ █     █   █     █    █     █    █  "
-ui_print "█   █ █████  ███  ████   ████  ████   █  "
-ui_print " "
-ui_print "   KSU · Thermal Genie $VER"
+ui_print "==========================================================="
+ui_print "  KSU-NEUS117 · Thermal Genie $VER"
 ui_print "==========================================================="
 ui_print "【1/2】是否解锁游戏帧率？（当前：$(show_onoff "$(get_conf FPS_UNLOCK)")）"
 ui_print "  [音量+]  开启：温控档 fps 统一 144，刷新率不再锁 60/90"
