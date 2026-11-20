@@ -87,8 +87,9 @@ esac
 ui_print " "
 TUN=$(get_conf THERMAL_UNLOCK)
 ui_print "【2/2】修改温度墙与冷却直控（默认 $(show_onoff "$TUN")）"
+ui_print "（不建议开，最好上散热背夹）"
 ui_print "音量+ 开  |  音量- 关"
-ui_print "开：CPU 最高可跑到 96°C"
+ui_print "开：CPU 温度最高可达 96°C"
 ui_print "关：保持默认限制"
 sel=$(read_vol)
 case "$sel" in
@@ -106,7 +107,6 @@ case "$sel" in
     ui_print "已选择：默认"
     ;;
 esac
-ui_print "（建议不开，上散热背夹）"
 sh "$MP/bin/desc.sh" 2>/dev/null
 
 chmod 0755 "$MP/bin/genie.sh" "$MP/bin/desc.sh" "$MP/service.sh" "$MP/action.sh" "$MP/uninstall.sh" "$MP/customize.sh" "$MP/post-fs-data.sh" 2>/dev/null
