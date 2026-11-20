@@ -46,7 +46,7 @@ sed -n '/【1\/2】/,/重启后生效/p' $T/out.txt | head -20
 ck "A 第一个问题 = 开"              'grep -q "^FPS_UNLOCK=1$" $T/new/config.conf'
 ck "A 第二个问题没被同一次按压带走" '[ "$(grep "^THERMAL_UNLOCK=" $T/new/config.conf)" = "THERMAL_UNLOCK=0" ]'
 ck "A 冷却直控也没被带走"           '[ "$(grep "^CDEV_UNLOCK=" $T/new/config.conf)" = "CDEV_UNLOCK=0" ]'
-ck "A 第二个问题显示保持（关）"      'grep -q "已选择：保持（关）" $T/out.txt'
+ck "A 第二个问题显示「已选择：默认」"  'grep -q "已选择：默认" $T/out.txt'
 ck "A 卡片描述=开/关/关"            'grep -q "当前：帧率解锁 开；温度墙解锁 关；冷却直控 关。" $T/new/module.prop'
 
 echo

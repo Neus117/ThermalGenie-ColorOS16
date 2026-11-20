@@ -65,7 +65,7 @@ drain_vol() {
 
 
 ui_print " "
-ui_print "两个开关，各自独立；不按键 = 保持当前设置"
+ui_print "两个开关，各自独立；不按键 = 保持默认设置"
 ui_print " "
 ui_print "【1/2】游戏帧率解锁（默认 $(show_onoff "$(get_conf FPS_UNLOCK)")）"
 ui_print "音量+ 开  |  音量- 关"
@@ -80,7 +80,7 @@ case "$sel" in
     ui_print "已选择：$(show_onoff "$FPSV")"
     ;;
   *)
-    ui_print "已选择：保持（$(show_onoff "$(get_conf FPS_UNLOCK)")）"
+    ui_print "已选择：默认"
     ;;
 esac
 
@@ -103,9 +103,10 @@ case "$sel" in
     ui_print "已选择：关"
     ;;
   *)
-    ui_print "已选择：保持（$(show_onoff "$TUN")）"
+    ui_print "已选择：默认"
     ;;
 esac
+ui_print "（建议不开，上散热背夹）"
 sh "$MP/bin/desc.sh" 2>/dev/null
 
 chmod 0755 "$MP/bin/genie.sh" "$MP/bin/desc.sh" "$MP/service.sh" "$MP/action.sh" "$MP/uninstall.sh" "$MP/customize.sh" "$MP/post-fs-data.sh" 2>/dev/null
@@ -116,13 +117,13 @@ rm -rf /data/local/tmp/.thermal_genie.lock 2>/dev/null
 
 ui_print " "
 ui_print "模块工作时："
-ui_print "电池 ≥35°C：把「手机壳温」上报成 37°C"
-ui_print "（系统按壳温决定要不要降频，就不提前降）"
+ui_print "电池 ≥35°C：把「手机外壳温度」持续改写成 37°C"
+ui_print "（系统按温度墙决定芯片是否降频，壳温墙是最矮的那堵）"
 ui_print "充电中电池 ≥30°C：不再压低充电功率"
 ui_print " "
 ui_print "安全护栏："
-ui_print "电池 52°C：停止上述改写，交回系统处理"
-ui_print "降到 47°C：恢复上述改写"
+ui_print "电池 52°C：停止改写，交回系统处理"
+ui_print "降到 47°C：恢复改写"
 ui_print " "
 ui_print "日志：/data/adb/modules/thermal_genie/logs/"
 ui_print "配置：同目录 config.conf，改完 10 秒后生效"
