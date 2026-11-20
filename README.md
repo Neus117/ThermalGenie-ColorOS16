@@ -2,7 +2,7 @@
 
 ColorOS 16（一加 Ace 5 Pro / PKR110）的降温解锁模块：骗过壳温上报、放开充电降温钳制、解锁游戏帧率档位、抬高温控 trip 点，再用一道 52.0℃ 的护栏把控制权交回系统。
 
-KernelSU / Magisk 模块，id `thermal_genie`。所有动作都是运行时写 sysfs 或 bind mount，不改写任何一个固件文件；卸载或重启即恢复。
+KernelSU / Magisk 模块，id `thermal_genie`。所有动作都是运行时写 sysfs 或 bind mount，不改写任何一个固件文件；重启后模块会在开机时重新应用，卸载即恢复原状。
 
 ## 它解决什么问题
 
@@ -178,7 +178,7 @@ su -c 'M=/data/adb/modules/thermal_genie; tail -5 $M/logs/charging.log; grep -E 
 
 - **冷却直控是绕过内核温控**：`CDEV_UNLOCK=1` 时内核在 88~92℃ 的降频被钉住，芯片会真的跑到 96℃ 左右，之后只剩两道闸——电池护栏 52.0℃、结温保险 96.0℃。高温下长期使用会加速电池老化。
 - 温度墙解锁只动 `cpu-*` / `sys-therm-*` 两类 zone，且 `THERMAL_CAP`（默认 98.0℃）封顶，不碰 hot trip。
-- 所有写入都是 sysfs 或运行时挂载，重启/卸载即恢复，没有不可逆操作。
+- 所有写入都是 sysfs 或运行时挂载，不改固件文件；重启后模块在开机时重新写入，卸载即恢复原状，没有不可逆操作。
 
 ## 离线验证
 
