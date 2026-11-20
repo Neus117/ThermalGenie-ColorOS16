@@ -175,12 +175,24 @@ cdev_pin() {
   zt2=${2:-0}
   case "$zt1" in ''|*[!0-9]*) zt1=0 ;; esac
   case "$zt2" in ''|*[!0-9]*) zt2=0 ;; esac
-  if [ "$zt1" -ge 96000 ] || [ "$zt2" -ge 96000 ]; then
+  ztmx=$zt1
+  [ "$zt2" -gt "$ztmx" ] && ztmx=$zt2
+  # 96℃ 放手、回落到 91℃ 才重新接管（5℃ 回差），避免在 96℃ 附近反复钉住/放开
+  if [ "$ztmx" -ge 96000 ]; then
     if [ "$cd_pinned" = 1 ]; then
       log "CDEV-RELEASE 结温高 z2=$zt1 z22=$zt2，交回系统"
       cd_pinned=0
     fi
+    if [ "$cd_hold" != 1 ]; then
+      cd_hold=1
+      log "CDEV-HOLD 结温高 z2=$zt1 z22=$zt2，暂停接管（回差 5℃）"
+    fi
     return 0
+  fi
+  if [ "$cd_hold" = 1 ]; then
+    [ "$ztmx" -ge 91000 ] && return 0
+    cd_hold=0
+    log "CDEV-RESUME 结温回落到 $ztmx，重新接管"
   fi
   if [ "$tbv" -ge "${CDEV_GUARD:-520}" ]; then
     if [ "$cd_pinned" = 1 ]; then
@@ -251,6 +263,7 @@ s_start=0; s_cap=0; s_peak=0; s_sum=0; s_n=0; s_maxtb=0; s_guard=0; s_maxcur=0
 vbad=0; cdbad=0
 last_m7=""
 cd_pinned=0
+cd_hold=0
 sb_chg=0
 MODE=""
 sb_active=0; sb_start=0; sb_cap0=0; sb_sum=0; sb_n=0; sb_cpu0=0
