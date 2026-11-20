@@ -14,7 +14,15 @@ onoff() { [ "$1" = 1 ] && echo 开 || echo 关; }
 
 base=$(tr '\n' ' ' < "$BASE" 2>/dev/null | sed 's/[[:space:]]*$//')
 [ -z "$base" ] && exit 0
-want="${base} 当前：帧率解锁 $(onoff "$(val FPS_UNLOCK)")；温度墙解锁 $(onoff "$(val THERMAL_UNLOCK)")；冷却直控 $(onoff "$(val CDEV_UNLOCK)")。"
+# 温度墙与冷却直控是同一个安装选项，状态合并成一项；两者被单独改得不一致时如实写出来
+th=$(onoff "$(val THERMAL_UNLOCK)")
+cd=$(onoff "$(val CDEV_UNLOCK)")
+if [ "$th" = "$cd" ]; then
+  tc="$th"
+else
+  tc="半开（温度墙 $th、冷却 $cd）"
+fi
+want="${base} 当前：帧率解锁 $(onoff "$(val FPS_UNLOCK)")；修改温度墙与冷却直控 $tc。"
 
 cur=$(sed -n 's/^description=//p' "$PROP" 2>/dev/null | head -n1)
 [ "$cur" = "$want" ] && exit 0

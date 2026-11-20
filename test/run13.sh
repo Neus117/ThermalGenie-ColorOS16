@@ -47,7 +47,7 @@ ck "A 第一个问题 = 开"              'grep -q "^FPS_UNLOCK=1$" $T/new/confi
 ck "A 第二个问题没被同一次按压带走" '[ "$(grep "^THERMAL_UNLOCK=" $T/new/config.conf)" = "THERMAL_UNLOCK=0" ]'
 ck "A 冷却直控也没被带走"           '[ "$(grep "^CDEV_UNLOCK=" $T/new/config.conf)" = "CDEV_UNLOCK=0" ]'
 ck "A 第二个问题显示「已选择：默认」"  'grep -q "已选择：默认" $T/out.txt'
-ck "A 卡片描述=开/关/关"            'grep -q "当前：帧率解锁 开；温度墙解锁 关；冷却直控 关。" $T/new/module.prop'
+ck "A 卡片描述=开/关"                'grep -q "当前：帧率解锁 开；修改温度墙与冷却直控 关。" $T/new/module.prop'
 
 echo
 echo "===== B 升级安装（旧 0/1/1，THERMAL 重复两行），按两次音量- ====="
@@ -60,7 +60,7 @@ ck "B 温度墙 0"             'grep -q "^THERMAL_UNLOCK=0$" $T/new/config.conf'
 ck "B 冷却直控 0"           'grep -q "^CDEV_UNLOCK=0$" $T/new/config.conf'
 ck "B 重复键收敛成一行"     '[ "$(grep -c "^THERMAL_UNLOCK=" $T/new/config.conf)" = 1 ]'
 ck "B 旧日志保留"           'grep -q "dur=79s" $T/new/logs/standby.log'
-ck "B 卡片描述=关/关/关"    'grep -q "当前：帧率解锁 关；温度墙解锁 关；冷却直控 关。" $T/new/module.prop'
+ck "B 卡片描述=关/关"        'grep -q "当前：帧率解锁 关；修改温度墙与冷却直控 关。" $T/new/module.prop'
 
 echo
 echo "===== C 升级安装（旧 FPS=0 / 温度墙=1 / 冷却=1），一次都不按 ====="
@@ -70,7 +70,14 @@ run
 ck "C 帧率保持 0"           'grep -q "^FPS_UNLOCK=0$" $T/new/config.conf'
 ck "C 温度墙保持 1"         'grep -q "^THERMAL_UNLOCK=1$" $T/new/config.conf'
 ck "C 冷却保持 1"           'grep -q "^CDEV_UNLOCK=1$" $T/new/config.conf'
-ck "C 卡片描述=关/开/开"    'grep -q "当前：帧率解锁 关；温度墙解锁 开；冷却直控 开。" $T/new/module.prop'
+ck "C 卡片描述=关/开"        'grep -q "当前：帧率解锁 关；修改温度墙与冷却直控 开。" $T/new/module.prop'
+
+echo
+echo "===== D 两项被改得不一致（温度墙=1、冷却=0），描述应写半开 ====="
+setup ""
+printf 'SHELL_SPOOF=1\nFPS_UNLOCK=1\nRATE_UNLOCK=1\nTHERMAL_UNLOCK=1\nCDEV_UNLOCK=0\n' > $T/old/config.conf
+run
+ck "D 卡片描述=半开"        'grep -q "当前：帧率解锁 开；修改温度墙与冷却直控 半开（温度墙 开、冷却 关）。" $T/new/module.prop'
 
 echo
 [ $fail -eq 0 ] && echo "ALL PASS" || echo "HAS FAILURES"
