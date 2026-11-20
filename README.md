@@ -202,7 +202,8 @@ su -c 'M=/data/adb/modules/thermal_genie; tail -5 $M/logs/charging.log; grep -E 
 | `run8` | 写回校验（`SPOOF-FAIL`）与 `TICK` 非法值回落 |
 | `run9` / `run11` | 待机会话汇总与字段完整性 |
 | `run12` | 待机会话状态落盘：进程中途退出后重启应写 `resume=1`；没赶上熄屏时应补一条 `src=gap`；跨重启的会话必须丢弃；电量不降反升时 `rate` 必须是 `n/a` |
-| `run13` | 升级安装：旧 `config.conf` 与 `logs/*.log` 都要被带过来，音量键选择仍然生效 |
+| `run13` | 升级安装：旧 `config.conf` 与 `logs/*.log` 都要被带过来，音量键选择仍然生效，卡片描述跟随实际状态 |
+| `run14` | 温度墙复核与冷却直控的批量读取版：trip 0~7 生效、trip_9 与非目标 zone 不动、只有 cpu-cluster* 被写 0 |
 | `run10` | 自适应节拍（slow ↔ fast） |
 | `run.sh` / `run4.sh` | v0.2 / v0.4 时代的状态机回归 |
 
@@ -233,4 +234,4 @@ bash run8.sh
 | v1.0.1 | 待机会话不再丢账：状态每轮落盘到 `.sbstate`，守护进程被看门狗重启后接着算（`resume=1`）；设备先挂起、进程没赶上「熄屏」那一刻时，醒来按挂起时长补记一条（`src=gap`，`SB_GAP_MIN`） |
 | v1.0.2 | 升级安装把旧 `logs/*.log` 一起带过来（此前换模块目录会把几天几周的待机与遥测记录删干净）；跨重启的待机会话不再续算（日志记 `STANDBY-DROP pre-boot`）；电量不降反升时 `rate` 写 `n/a`（此前会写出 `-4.-99%/h` 这种坏值）；`post-fs.log` 每行加 `up=秒数` |
 | v1.0.3 | 安装时多问一句「温度墙解锁 + 冷却设备直控」：音量+ 打开、音量− 关闭、不按保持当前设置（升级不会被默认值改写）；音量键选择不再覆盖用户手改的值；`config.conf` 末行补了换行，重复键收敛成一行 |
-| v1.0.4 | 管理器卡片的描述改成按实际状态生成（装机时按选择写一次、每次开机按 `config.conf` 刷新），不再写死「默认关闭」；新增 `desc.base` 与 `bin/desc.sh` |
+| v1.0.4 | 安装横幅重画（NEUS117 块字 + `KSU · Thermal Genie`）；管理器卡片的描述改成按实际状态生成（装机写一次、每次开机按 `config.conf` 刷新）；守护进程热路径改成批量读取（插电态 CPU 21% → 2.5%）；新增 `desc.base`、`bin/desc.sh` 与 `test/run14.sh` |

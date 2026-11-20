@@ -55,7 +55,14 @@ read_vol() {
 }
 
 ui_print " "
-ui_print "==================== Thermal Genie $VER ===================="
+ui_print "█   █ █████ █   █  ████   ██    ██  █████"
+ui_print "██  █ █     █   █ █        █     █      █"
+ui_print "█ █ █ ████  █   █  ███     █     █     █ "
+ui_print "█  ██ █     █   █     █    █     █    █  "
+ui_print "█   █ █████  ███  ████   ████  ████   █  "
+ui_print " "
+ui_print "   KSU · Thermal Genie $VER"
+ui_print "==========================================================="
 ui_print "【1/2】是否解锁游戏帧率？（当前：$(show_onoff "$(get_conf FPS_UNLOCK)")）"
 ui_print "  [音量+]  开启：温控档 fps 统一 144，刷新率不再锁 60/90"
 ui_print "  [音量-]  关闭：完全不碰这两个系统文件"
