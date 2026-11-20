@@ -11,7 +11,8 @@ FPS_MAX=${FPS_MAX:-144}
 W="$MD/work"
 mkdir -p "$W" "$MD/logs"
 L="$MD/logs/post-fs.log"
-log() { echo "[$(date '+%m-%d %H:%M:%S')] $*" >> "$L"; }
+# 开机早期系统时钟还没校准（可能读到 1971 年），所以每行都带 up=秒数，用它在时间戳不可信时排先后
+log() { echo "[$(date '+%m-%d %H:%M:%S') up=$(cut -d. -f1 /proc/uptime)s] $*" >> "$L"; }
 case "$FPS_MAX" in ''|*[!0-9]*) FPS_MAX=144 ;; esac
 
 validate() {

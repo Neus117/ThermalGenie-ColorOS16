@@ -101,6 +101,7 @@ ZPMIC=/sys/class/thermal/thermal_zone75/temp
 CDIR=/sys/class/thermal
 PWS=/sys/kernel/debug/wakeup_sources
 PDBG=/sys/kernel/debug
+UPTIME=/proc/uptime
 
 # ---- 单实例锁 ----
 LK=/data/local/tmp/.thermal_genie.lock
@@ -275,8 +276,23 @@ sb_load() {
   sb_cap_last=$(san "$sb_cap_last" "")
   sb_t_last=$(san "$sb_t" 0)
   tnow=$(date +%s)
-  # 只接受 36 小时内开始的会话，更久的多半是关机/拔电，硬接上去反而失真
+  # 本次开机的起点：跨重启的会话不能续算（关机/重启那段不是待机，硬接上去会把时长算大）
+  up=$(cut -d. -f1 "$UPTIME" 2>/dev/null)
+  case "$up" in ''|*[!0-9]*) up="" ;; esac
+  boot_epoch=0
+  [ -n "$up" ] && boot_epoch=$((tnow - up))
+  # 补账锚点同样不能跨重启
+  if [ "$boot_epoch" -gt 0 ] && [ "$sb_t_last" -gt 0 ] && [ "$sb_t_last" -lt "$boot_epoch" ]; then
+    sb_cap_last=""; sb_t_last=0
+  fi
+  # 只接受 36 小时内、且发生在本轮开机之后的会话
   if [ "$sb_active" = "1" ] && [ "$sb_start" -gt 0 ] && [ $((tnow - sb_start)) -le 129600 ]; then
+    if [ "$boot_epoch" -gt 0 ] && [ "$sb_start" -lt "$boot_epoch" ]; then
+      log "STANDBY-DROP pre-boot start=$sb_start boot=$boot_epoch"
+      sb_active=0; sb_start=0; sb_cap0=0; sb_sum=0; sb_n=0; sb_cpu0=0
+      sb_ss0=0; sb_sf0=0; sb_chg=0; sb_cap_last=""; sb_t_last=0
+      return 0
+    fi
     sb_resumed=1
     log "STANDBY-RESUME start=$sb_start elapsed=$((tnow - sb_start))s cap=$sb_cap0 samples=$sb_n"
     # CPU 计数是按进程算的：旧进程的基线跨进程无效，用当前进程重新取基线。
@@ -518,9 +534,9 @@ guarded=0; guarded_mode=""
             [ "$sb_n" -gt 0 ] && sbavg=$((sb_sum / sb_n))
             sbsph=0
             [ "$sbdur" -gt 0 ] && sbsph=$(( sb_n * 3600 / sbdur ))
-            # 时长短于 30 分钟时，电量只有 1% 一格，算出来的速率是噪声
+            # 时长短于 30 分钟、或电量不降反升（充电段没被识别出来）时，速率没有意义
             sbrate="n/a"
-            if [ "$sbdur" -ge 1800 ] && [ "$sb_chg" = 0 ]; then
+            if [ "$sbdur" -ge 1800 ] && [ "$sb_chg" = 0 ] && [ "$sb_cap0" -gt "$sbcap1" ]; then
               sbr=$(( (sb_cap0 - sbcap1) * 360000 / sbdur ))
               sbrate="$((sbr / 100)).$((sbr % 100))%/h"
             fi

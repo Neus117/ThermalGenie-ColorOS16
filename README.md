@@ -71,7 +71,7 @@ pwsh -File .\build.ps1
    - **音量−**：不碰这两个系统文件
 4. 重启
 
-升级安装会保留手机上的 `config.conf`（温度墙、冷却直控、护栏阈值这些手改值不会被打回默认），音量键选择仍然生效。
+升级安装会保留手机上的 `config.conf`（温度墙、冷却直控、护栏阈值这些手改值不会被打回默认）和 `logs/*.log`（换模块目录会把整个目录换掉，不带上就全没了），音量键选择仍然生效。
 
 ## 配置
 
@@ -117,7 +117,7 @@ pwsh -File .\build.ps1
 | `charging.log` | 每次充电一条汇总：时长 / 起止电量 / 峰值 / 均值 / 最大电流 / 最高温 / 护栏是否触发 |
 | `standby.log` | **每次待机一条汇总**：`dur` 时长、`cap` 起止电量、`samples` 采样数、`sph` 每小时采样数（判断深睡比例）、`avg` 醒着时的平均电流、`rate` 每小时掉电（仅 ≥30 分钟才计算）、`cpu` 本段模块自耗。行尾 `src=gap` = 这段是醒来后按挂起时长补记的（进程没赶上「熄屏」那一刻，所以 `samples`/`avg`/`cpu` 记 0）；行尾 `resume=1` = 这段跨过一次守护进程重启，`dur` 含重启前后两段 |
 | `standby-YYYYMMDD.log` | 每次待机结束一行 `WAKE`，记录当次唤醒源计数（按持锁时长排序的 top5，`name:count`）；读不到 debugfs 时写 `unavailable` |
-| `post-fs.log` | 开机挂载帧率补丁的结果（`OK` / `BIND-SHADOWED` / `VALIDATE-FAIL` / `STAGED`） |
+| `post-fs.log` | 开机挂载帧率补丁的结果（`OK` / `BIND-SHADOWED` / `VALIDATE-FAIL` / `STAGED`）。每行带 `up=秒数`：开机早期系统时钟可能还没校准，时间戳不可信时用 `up=` 排先后 |
 
 一次性看当前状态：
 
@@ -190,7 +190,8 @@ su -c 'M=/data/adb/modules/thermal_genie; tail -5 $M/logs/charging.log; grep -E 
 | `run7` | 功率换算（mA×µV→mW）、放电样本不计入 |
 | `run8` | 写回校验（`SPOOF-FAIL`）与 `TICK` 非法值回落 |
 | `run9` / `run11` | 待机会话汇总与字段完整性 |
-| `run12` | 待机会话状态落盘：进程中途退出后重启应写 `resume=1`；没赶上熄屏时应补一条 `src=gap` |
+| `run12` | 待机会话状态落盘：进程中途退出后重启应写 `resume=1`；没赶上熄屏时应补一条 `src=gap`；跨重启的会话必须丢弃；电量不降反升时 `rate` 必须是 `n/a` |
+| `run13` | 升级安装：旧 `config.conf` 与 `logs/*.log` 都要被带过来，音量键选择仍然生效 |
 | `run10` | 自适应节拍（slow ↔ fast） |
 | `run.sh` / `run4.sh` | v0.2 / v0.4 时代的状态机回归 |
 
@@ -219,3 +220,4 @@ bash run8.sh
 | v0.8.4 | 移除 `/sys/power/wakeup_count` 读取（内核 `pm_get_wakeup_count` 会持锁阻塞，熄屏瞬间必然卡死）；待机汇总去掉 `wc`，保留 `ss` / `lf` |
 | v1.0.0 | 温度墙解锁（trip +5.0℃ → 97℃）+ 冷却设备直控、统一 52.0/47.0 护栏、降频遥测（`TEL` / `THR`）；模块更名 Thermal Genie for ColorOS 16 |
 | v1.0.1 | 待机会话不再丢账：状态每轮落盘到 `.sbstate`，守护进程被看门狗重启后接着算（`resume=1`）；设备先挂起、进程没赶上「熄屏」那一刻时，醒来按挂起时长补记一条（`src=gap`，`SB_GAP_MIN`） |
+| v1.0.2 | 升级安装把旧 `logs/*.log` 一起带过来（此前换模块目录会把几天几周的待机与遥测记录删干净）；跨重启的待机会话不再续算（日志记 `STANDBY-DROP pre-boot`）；电量不降反升时 `rate` 写 `n/a`（此前会写出 `-4.-99%/h` 这种坏值）；`post-fs.log` 每行加 `up=秒数` |

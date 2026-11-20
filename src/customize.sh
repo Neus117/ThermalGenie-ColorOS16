@@ -18,6 +18,14 @@ if [ -f "$OLDCFG" ] && [ -f "$MP/config.conf" ] && [ "$OLDCFG" != "$MP/config.co
   ui_print "- 已保留原有 config.conf（升级不覆盖配置）"
 fi
 
+# 升级时把旧日志一并带过来：换模块目录会删掉 logs/，几天几周的待机与遥测记录说没就没
+OLDLOGS=/data/adb/modules/thermal_genie/logs
+if [ -d "$OLDLOGS" ] && [ "$OLDLOGS" != "$MP/logs" ]; then
+  mkdir -p "$MP/logs" 2>/dev/null
+  cp -f "$OLDLOGS"/*.log "$MP/logs"/ 2>/dev/null
+  ui_print "- 已保留原有日志（logs/*.log）"
+fi
+
 ui_print " "
 ui_print "==================== Thermal Genie $VER ===================="
 ui_print "是否解锁游戏帧率？"

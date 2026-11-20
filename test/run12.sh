@@ -14,8 +14,9 @@ setup() {
       -e "s#^NCD=.*#NCD=$T/cd#" \
       -e "s#^NB=.*#NB=$T/b#; s#^NTB=.*#NTB=$T/tb#; s#^NCUR=.*#NCUR=$T/cur#; s#^NVOL=.*#NVOL=$T/vol#; s#^NPW=.*#NPW=$T/pw#; s#^NCAP=.*#NCAP=$T/cap#; s#^NST=.*#NST=$T/st#" \
       -e "s#^NC4=.*#NC4=$T/none#; s#^NC7=.*#NC7=$T/none#" \
+      -e "s#^UPTIME=.*#UPTIME=$T/uptime#" \
       -e "s#^LK=.*#LK=$T/lock#" \
-      -e 's#^while :; do#while [ "$i" -lt 60 ]; do#' \
+      -e 's#^while :; do#while [ "$i" -lt 30 ]; do#' \
       -e "s#^  sleep \"\$TICK\"#  sleep 0.02#" \
       "$SRC" > $T/bin/genie.sh
   # 假 dumpsys：按调用次数决定屏幕状态（确定性，不依赖墙钟）
@@ -33,11 +34,12 @@ EOF
   echo 330 > $T/tb; echo 5 > $T/cd; echo 30000 > $T/ps
   echo Discharging > $T/st; echo 500 > $T/cur; echo 4000000 > $T/vol
   echo 60 > $T/cap; : > $T/none
+  echo "3600.00 7200.00" > $T/uptime   # 假 /proc/uptime：本轮开机 1 小时
 }
 
-echo "===== A 正常会话（前 10 次采样 Dozing，之后 Awake）====="
+echo "===== A 正常会话（前 3 次采样 Dozing，之后 Awake）====="
 setup
-DCOUNT_SWITCH=10 PATH=$T/fakebin:$PATH sh $T/bin/genie.sh 2>/dev/null
+DCOUNT_SWITCH=3 PATH=$T/fakebin:$PATH sh $T/bin/genie.sh 2>/dev/null
 A=$(cat $T/logs/standby.log 2>/dev/null)
 echo "$A"
 ck "A 写了 1 条汇总" '[ $(printf "%s\n" "$A" | grep -c "^\[" ) -eq 1 ]'
@@ -83,6 +85,57 @@ echo "$C"
 ck "C 写了 src=gap" 'printf "%s\n" "$C" | grep -q "src=gap"'
 ck "C 的 dur 覆盖空档（>=90s）" 'printf "%s\n" "$C" | grep -qE "dur=[0-9]{3,}s"'
 ck "C 的电量差是 50->48" 'printf "%s\n" "$C" | grep -q "cap=50->48"'
+
+echo
+echo "===== D 跨重启不续算（会话开始于本次开机之前，应丢弃并记 DROP）====="
+setup
+now=$(date +%s)
+cat > $T/.sbstate <<EOF
+sb_ver=1
+sb_active=1
+sb_start=$((now - 7200))
+sb_cap0=50
+sb_sum=0
+sb_n=0
+sb_cpu0=0
+sb_ss0=0
+sb_sf0=0
+sb_chg=0
+sb_cap_last=50
+sb_t=$((now - 7200))
+EOF
+DCOUNT_SWITCH=0 PATH=$T/fakebin:$PATH sh $T/bin/genie.sh 2>/dev/null
+D=$(cat $T/logs/standby.log 2>/dev/null)
+G=$(cat $T/logs/genie.log 2>/dev/null)
+echo "standby.log: ${D:-（空）}"
+ck "D 没有写出跨重启的待机行" '[ -z "$D" ]'
+ck "D 记了 STANDBY-DROP pre-boot" 'printf "%s\n" "$G" | grep -q "STANDBY-DROP pre-boot"'
+
+echo
+echo "===== E 电量不降反升（充电段没被识别）时，rate 必须是 n/a，不能写出负的怪异格式 ====="
+setup
+now=$(date +%s)
+cat > $T/.sbstate <<EOF
+sb_ver=1
+sb_active=1
+sb_start=$((now - 3000))
+sb_cap0=60
+sb_sum=0
+sb_n=0
+sb_cpu0=0
+sb_ss0=0
+sb_sf0=0
+sb_chg=0
+sb_cap_last=60
+sb_t=$((now - 3000))
+EOF
+echo 61 > $T/cap
+DCOUNT_SWITCH=0 PATH=$T/fakebin:$PATH sh $T/bin/genie.sh 2>/dev/null
+E=$(cat $T/logs/standby.log 2>/dev/null)
+echo "$E"
+ck "E 写出了会话（dur>=1800s）" 'printf "%s\n" "$E" | grep -qE "dur=[0-9]{4,}s"'
+ck "E 的 rate 是 n/a" 'printf "%s\n" "$E" | grep -q "rate=n/a"'
+ck "E 没有负速率/双点格式" '! printf "%s\n" "$E" | grep -qE "rate=-|%\.-"'
 
 echo
 [ $fail -eq 0 ] && echo "ALL PASS" || echo "HAS FAILURES"

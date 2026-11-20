@@ -1,6 +1,6 @@
 id=thermal_genie
 name=Thermal Genie for ColorOS 16
-version=v1.0.1
-versionCode=101
+version=v1.0.2
+versionCode=102
 author=Neus117
 description=壳温诱骗 + 充电降温解锁 + 游戏帧率解锁 + 温度墙解锁（10 核结温 97C + 冷却设备直控）+ 统一 52C 护栏。自动记录充电功率、待机会话、降频事件。所有改动为运行时写入，重启即恢复。
