@@ -42,7 +42,7 @@ echo "===== A 全新安装，只按一次音量+ ====="
 setup "up"
 rm -f $T/old/config.conf
 run
-sed -n '/KSU-NEUS117/,/重启后生效/p' $T/out.txt | head -22
+sed -n '/【1\/2】/,/重启后生效/p' $T/out.txt | head -20
 ck "A 第一个问题 = 开"              'grep -q "^FPS_UNLOCK=1$" $T/new/config.conf'
 ck "A 第二个问题没被同一次按压带走" '[ "$(grep "^THERMAL_UNLOCK=" $T/new/config.conf)" = "THERMAL_UNLOCK=0" ]'
 ck "A 冷却直控也没被带走"           '[ "$(grep "^CDEV_UNLOCK=" $T/new/config.conf)" = "CDEV_UNLOCK=0" ]'
