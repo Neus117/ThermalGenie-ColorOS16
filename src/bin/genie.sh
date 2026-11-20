@@ -34,6 +34,8 @@ TICK=0.2
 TELEMETRY=1
 ADAPTIVE=1
 STANDBY=1
+# 设备挂起超过这么久，醒来后就把这段按「补账」记成一次熄屏（0=关闭补账）
+SB_GAP_MIN=90
 [ -f "$CF" ] && . "$CF"
 
 san() { case "$1" in ''|*[!0-9]*) echo "$2" ;; *) echo "$1" ;; esac; }
@@ -48,6 +50,7 @@ GUARD_TRIGGER_GAME=$(san "$GUARD_TRIGGER_GAME" 520)
 GUARD_RELEASE_GAME=$(san "$GUARD_RELEASE_GAME" 470)
 GUARD_VALUE_MIN=$(san "$GUARD_VALUE_MIN" 50000)
 GUARD_OFFSET=$(san "$GUARD_OFFSET" 8000)
+SB_GAP_MIN=$(san "$SB_GAP_MIN" 90)
 [ "$GUARD_RELEASE" -ge "$GUARD_TRIGGER" ] && GUARD_RELEASE=$((GUARD_TRIGGER - 50))
 [ "$GUARD_RELEASE_GAME" -ge "$GUARD_TRIGGER_GAME" ] && GUARD_RELEASE_GAME=$((GUARD_TRIGGER_GAME - 50))
 
@@ -231,10 +234,66 @@ cd_pinned=0
 sb_chg=0
 MODE=""
 sb_active=0; sb_start=0; sb_cap0=0; sb_sum=0; sb_n=0; sb_cpu0=0
+
+# ---- 待机会话状态落盘 ----
+# 这些变量只在内存里时，进程被看门狗杀掉/重启，正在进行的那段熄屏就永远写不出来
+# （11-19 一天被杀了 4 次）。每轮把状态写进 .sbstate，重启后接着算。
+SBST="$MD/.sbstate"
+sb_cap_last=""
+sb_t_last=0
+sb_resumed=0
+sb_save() {
+  {
+    echo "sb_ver=1"
+    echo "sb_active=$sb_active"
+    echo "sb_start=$sb_start"
+    echo "sb_cap0=$sb_cap0"
+    echo "sb_sum=$sb_sum"
+    echo "sb_n=$sb_n"
+    echo "sb_cpu0=$sb_cpu0"
+    echo "sb_ss0=$sb_ss0"
+    echo "sb_sf0=$sb_sf0"
+    echo "sb_chg=$sb_chg"
+    echo "sb_cap_last=$sb_cap_last"
+    echo "sb_t=$epoch"
+  } > "$SBST.tmp" 2>/dev/null && mv -f "$SBST.tmp" "$SBST" 2>/dev/null
+}
+sb_load() {
+  [ -f "$SBST" ] || return 0
+  sb_ver=0
+  . "$SBST" 2>/dev/null
+  [ "${sb_ver:-0}" = "1" ] || return 0
+  sb_active=$(san "$sb_active" 0)
+  sb_start=$(san "$sb_start" 0)
+  sb_cap0=$(san "$sb_cap0" 0)
+  sb_sum=$(san "$sb_sum" 0)
+  sb_n=$(san "$sb_n" 0)
+  sb_cpu0=$(san "$sb_cpu0" 0)
+  sb_ss0=$(san "$sb_ss0" 0)
+  sb_sf0=$(san "$sb_sf0" 0)
+  sb_chg=$(san "$sb_chg" 0)
+  sb_cap_last=$(san "$sb_cap_last" "")
+  sb_t_last=$(san "$sb_t" 0)
+  tnow=$(date +%s)
+  # 只接受 36 小时内开始的会话，更久的多半是关机/拔电，硬接上去反而失真
+  if [ "$sb_active" = "1" ] && [ "$sb_start" -gt 0 ] && [ $((tnow - sb_start)) -le 129600 ]; then
+    sb_resumed=1
+    log "STANDBY-RESUME start=$sb_start elapsed=$((tnow - sb_start))s cap=$sb_cap0 samples=$sb_n"
+    # CPU 计数是按进程算的：旧进程的基线跨进程无效，用当前进程重新取基线。
+    # 于是 resume=1 那条线的 cpu= 只统计重启之后的部分（samples/n 才是整段）。
+    u0=$(awk '{print $14+$15+$16+$17}' "/proc/$$/stat" 2>/dev/null)
+    case "$u0" in ''|*[!0-9]*) u0=0 ;; esac
+    sb_cpu0=$u0
+  else
+    sb_active=0
+  fi
+}
+[ "$STANDBY" = "1" ] && sb_load
 i=0
 while :; do
   i=$((i + 1))
-  echo "$(date +%s)" > "$MD/.hb.tmp" 2>/dev/null && mv -f "$MD/.hb.tmp" "$MD/.hb" 2>/dev/null
+  epoch=$(date +%s)
+  echo "$epoch" > "$MD/.hb.tmp" 2>/dev/null && mv -f "$MD/.hb.tmp" "$MD/.hb" 2>/dev/null
 
   if [ $((i % 50)) -eq 0 ] && [ -f "$CF" ]; then
     . "$CF"
@@ -259,6 +318,28 @@ while :; do
   tb=$(cat "$NTB" 2>/dev/null)
   case "$tb" in ''|*[!0-9]*) tb=0 ;; esac
   st=$(cat "$NST" 2>/dev/null)
+
+  # ---- 补账：熄屏后设备先 suspend，进程还没采样到「熄屏」就被冻结了 ----
+  # 醒来时 now - 上次遥测 这段空档必然是挂起（屏幕灭着），按电量差补一条 src=gap。
+  # 只在没有进行中的会话时补，避免和正常会话重复记账。
+  if [ "$STANDBY" = "1" ] && [ "$sb_active" = "0" ] && [ -n "$sb_cap_last" ] && [ "$sb_t_last" -gt 0 ] && [ "$SB_GAP_MIN" -gt 0 ]; then
+    gap=$((epoch - sb_t_last))
+    if [ "$gap" -gt "$SB_GAP_MIN" ] && [ "$gap" -le 129600 ] && [ "$st" != Charging ]; then
+      cnow=$(cat "$NCAP" 2>/dev/null)
+      case "$cnow" in ''|*[!0-9]*) cnow="" ;; esac
+      if [ -n "$cnow" ] && [ "$sb_cap_last" -gt "$cnow" ]; then
+        if [ "$gap" -ge 1800 ]; then
+          grt=$(( (sb_cap_last - cnow) * 360000 / gap ))
+          grate="$((grt / 100)).$((grt % 100))%/h"
+        else
+          grate="n/a"
+        fi
+        echo "[$(date '+%F %T')] standby dur=${gap}s cap=${sb_cap_last}->${cnow} samples=0 sph=0 avg=0mA rate=${grate} cpu=0ticks ss=n/a lf=- chg=0 mState=n/a src=gap" >> "$SBF"
+        log "STANDBY-GAP dur=${gap}s cap=${sb_cap_last}->${cnow} rate=$grate"
+        sb_cap_last=$cnow
+      fi
+    fi
+  fi
 
   if [ "$st" = Charging ]; then
     gt=$GUARD_TRIGGER; gr=$GUARD_RELEASE; gm=charge
@@ -428,6 +509,8 @@ guarded=0; guarded_mode=""
         *Awake*)
           if [ "$sb_active" = 1 ]; then
             sb_active=0
+            [ "$sb_resumed" = "1" ] && sb_resume_tag=" resume=1" || sb_resume_tag=""
+            sb_resumed=0
             sbdur=$(( $(date +%s) - sb_start ))
             sbcap1=$(cat "$NCAP" 2>/dev/null)
             case "$sbcap1" in ''|*[!0-9]*) sbcap1=$sb_cap0 ;; esac
@@ -444,6 +527,7 @@ guarded=0; guarded_mode=""
             u=$(awk '{print $14+$15+$16+$17}' "/proc/$$/stat" 2>/dev/null)
             case "$u" in ''|*[!0-9]*) u=0 ;; esac
             sbcpu=$((u - sb_cpu0))
+            [ "$sbcpu" -lt 0 ] && sbcpu=0
             sbwc="skip"
             ps1=$(cat "$PSS" 2>/dev/null)
             case "$ps1" in ''|*[!0-9]*) ps1=0 ;; esac
@@ -457,7 +541,7 @@ guarded=0; guarded_mode=""
             idle="$sb_idle"
             [ -z "$idle" ] && idle=$(to dumpsys deviceidle 2>/dev/null | grep -m1 -o 'mState=[A-Z_]*')
             [ -z "$idle" ] && idle="mState=?"
-            echo "[$(date '+%F %T')] standby dur=${sbdur}s cap=${sb_cap0}->${sbcap1} samples=$sb_n sph=${sbsph} avg=${sbavg}mA rate=${sbrate} cpu=${sbcpu}ticks ss=${sbss} lf=${sblf} chg=${sb_chg} ${idle}" >> "$SBF"
+            echo "[$(date '+%F %T')] standby dur=${sbdur}s cap=${sb_cap0}->${sbcap1} samples=$sb_n sph=${sbsph} avg=${sbavg}mA rate=${sbrate} cpu=${sbcpu}ticks ss=${sbss} lf=${sblf} chg=${sb_chg} ${idle}${sb_resume_tag}" >> "$SBF"
             # 唤醒源按「持锁时间增量」排序，次数多不代表耗电（event5 22.9 万次只持有 22 秒）
             wsrc=""
             to awk 'NR>1{print $1, $7}' "$PWS" > "$MD/.ws1" 2>/dev/null
@@ -467,6 +551,7 @@ guarded=0; guarded_mode=""
             [ -z "$wsrc" ] && wsrc="n/a"
             echo "WAKE $(date '+%F %T') $idle top=$wsrc ss=${sbss} lf=${sblf}" >> "$SBD"
             log "STANDBY-END dur=${sbdur}s rate=${sbrate} avg=${sbavg}mA cpu=${sbcpu}ticks ${idle}"
+            sb_save
           fi
           ;;
         *)
@@ -485,9 +570,18 @@ guarded=0; guarded_mode=""
             sb_idle=""
             to awk 'NR>1{print $1, $7}' "$PWS" > "$MD/.ws0" 2>/dev/null
             log "STANDBY-START cap=$sb_cap0"
+            sb_save
           fi
           ;;
       esac
+    fi
+
+    # 记下这一刻的电量与时间：进程被杀/设备冻结后，靠它给「补账」提供起点
+    if [ "$STANDBY" = "1" ]; then
+      capn=$(cat "$NCAP" 2>/dev/null)
+      case "$capn" in ''|*[!0-9]*) ;; *) sb_cap_last=$capn ;; esac
+      sb_t_last=$epoch
+      sb_save
     fi
   fi
 

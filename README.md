@@ -85,6 +85,7 @@ pwsh -File .\build.ps1
 | `GUARD_TRIGGER_GAME` / `GUARD_RELEASE_GAME` | `520` / `470` | 非充电时的护栏 |
 | `GUARD_VALUE_MIN` / `GUARD_OFFSET` | `50000` / `8000` | 护栏上报值 `max(50.0℃, 电池+8.0℃)`，上限 60.0℃ |
 | `ADAPTIVE` / `STANDBY` / `TELEMETRY` / `TICK` / `CHARGE_SAMPLE` | `1` / `1` / `1` / `0.2` / `5` | 节拍、待机统计、遥测开关与采样密度 |
+| `SB_GAP_MIN` | `90` | 设备挂起超过这么多秒、醒来又没看到「熄屏」那一刻时，按电量差补记一条待机；`0` 关闭补账 |
 | `THERMAL_UNLOCK` / `THERMAL_DELTA` / `THERMAL_CAP` | `0` / `5000` / `98000` | 温度墙解锁，**默认关闭** |
 | `CDEV_UNLOCK` / `CDEV_GUARD` | `0` / `520` | 冷却设备直控，**默认关闭** |
 
@@ -112,7 +113,7 @@ pwsh -File .\build.ps1
 | `genie.log` | 启动横幅（含数据源自检 `CAPS`）、状态切换、护栏触发、心跳异常、充电起止、温度墙补写、冷却直控动作 |
 | `telemetry-YYYYMMDD.log` | 按天：`TEL` 状态行约 5 秒一条，`CHG` 充电功率点约 1 秒一个，`CAL` 每次充电开始记原始读数用于校准单位，`THR` 频率上限一变就记一条 |
 | `charging.log` | 每次充电一条汇总：时长 / 起止电量 / 峰值 / 均值 / 最大电流 / 最高温 / 护栏是否触发 |
-| `standby.log` | **每次待机一条汇总**：`dur` 时长、`cap` 起止电量、`samples` 采样数、`sph` 每小时采样数（判断深睡比例）、`avg` 醒着时的平均电流、`rate` 每小时掉电（仅 ≥30 分钟才计算）、`cpu` 本段模块自耗 |
+| `standby.log` | **每次待机一条汇总**：`dur` 时长、`cap` 起止电量、`samples` 采样数、`sph` 每小时采样数（判断深睡比例）、`avg` 醒着时的平均电流、`rate` 每小时掉电（仅 ≥30 分钟才计算）、`cpu` 本段模块自耗。行尾 `src=gap` = 这段是醒来后按挂起时长补记的（进程没赶上「熄屏」那一刻，所以 `samples`/`avg`/`cpu` 记 0）；行尾 `resume=1` = 这段跨过一次守护进程重启，`dur` 含重启前后两段 |
 | `standby-YYYYMMDD.log` | 每次待机结束一行 `WAKE`，记录当次唤醒源计数（按持锁时长排序的 top5，`name:count`）；读不到 debugfs 时写 `unavailable` |
 | `post-fs.log` | 开机挂载帧率补丁的结果（`OK` / `BIND-SHADOWED` / `VALIDATE-FAIL` / `STAGED`） |
 
@@ -187,6 +188,7 @@ su -c 'M=/data/adb/modules/thermal_genie; tail -5 $M/logs/charging.log; grep -E 
 | `run7` | 功率换算（mA×µV→mW）、放电样本不计入 |
 | `run8` | 写回校验（`SPOOF-FAIL`）与 `TICK` 非法值回落 |
 | `run9` / `run11` | 待机会话汇总与字段完整性 |
+| `run12` | 待机会话状态落盘：进程中途退出后重启应写 `resume=1`；没赶上熄屏时应补一条 `src=gap` |
 | `run10` | 自适应节拍（slow ↔ fast） |
 | `run.sh` / `run4.sh` | v0.2 / v0.4 时代的状态机回归 |
 
@@ -214,3 +216,4 @@ bash run8.sh
 | v0.7.2 | 待机汇总口径修正：`rate` 仅 ≥30 分钟计算（短会话写 `n/a`）、去掉误导性的 `int`、新增 `sph` 采样密度、唤醒源读不到时写 `unavailable` 并尝试挂 debugfs |
 | v0.8.4 | 移除 `/sys/power/wakeup_count` 读取（内核 `pm_get_wakeup_count` 会持锁阻塞，熄屏瞬间必然卡死）；待机汇总去掉 `wc`，保留 `ss` / `lf` |
 | v1.0.0 | 温度墙解锁（trip +5.0℃ → 97℃）+ 冷却设备直控、统一 52.0/47.0 护栏、降频遥测（`TEL` / `THR`）；模块更名 Thermal Genie for ColorOS 16 |
+| v1.0.1 | 待机会话不再丢账：状态每轮落盘到 `.sbstate`，守护进程被看门狗重启后接着算（`resume=1`）；设备先挂起、进程没赶上「熄屏」那一刻时，醒来按挂起时长补记一条（`src=gap`，`SB_GAP_MIN`） |
