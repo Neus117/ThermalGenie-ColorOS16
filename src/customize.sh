@@ -69,17 +69,16 @@ ui_print "【1/2】是否解锁游戏帧率？（当前：$(show_onoff "$(get_co
 ui_print "  [音量+]  开启：温控档 fps 统一 144，刷新率不再锁 60/90"
 ui_print "  [音量-]  关闭：完全不碰这两个系统文件"
 ui_print "  （10 秒内不按 = 保持当前设置）"
-ui_print "============================"
 sel=$(read_vol)
 case "$sel" in
   up|down)
     [ "$sel" = up ] && FPSV=1 || FPSV=0
     set_conf FPS_UNLOCK "$FPSV"
     set_conf RATE_UNLOCK "$FPSV"
-    ui_print "- 游戏帧率解锁：$(show_onoff "$FPSV")"
+    ui_print "  → 游戏帧率解锁：$(show_onoff "$FPSV")"
     ;;
   *)
-    ui_print "- 游戏帧率解锁：保持当前设置（$(show_onoff "$(get_conf FPS_UNLOCK)")）"
+    ui_print "  → 游戏帧率解锁：保持当前设置（$(show_onoff "$(get_conf FPS_UNLOCK)")）"
     ;;
 esac
 
@@ -90,21 +89,20 @@ ui_print "  [音量+]  开启：10 个 CPU 核 trip 抬到 97℃，并禁止 cpu
 ui_print "           代价：芯片会真跑到 96℃ 左右，长期用加速电池老化"
 ui_print "  [音量-]  关闭：保留内核原始降频行为"
 ui_print "  （10 秒内不按 = 保持当前设置）"
-ui_print "============================"
 sel=$(read_vol)
 case "$sel" in
   up)
     set_conf THERMAL_UNLOCK 1
     set_conf CDEV_UNLOCK 1
-    ui_print "- 温度墙/冷却直控：开启（电池 52.0℃ 或结温 96℃ 自动交回内核）"
+    ui_print "  → 温度墙/冷却直控：开启（电池 52.0℃ 或结温 96℃ 自动交回内核）"
     ;;
   down)
     set_conf THERMAL_UNLOCK 0
     set_conf CDEV_UNLOCK 0
-    ui_print "- 温度墙/冷却直控：关闭"
+    ui_print "  → 温度墙/冷却直控：关闭"
     ;;
   *)
-    ui_print "- 温度墙/冷却直控：保持当前设置（$(show_onoff "$TUN")）"
+    ui_print "  → 温度墙/冷却直控：保持当前设置（$(show_onoff "$TUN")）"
     ;;
 esac
 
