@@ -65,49 +65,45 @@ drain_vol() {
 
 
 ui_print " "
-ui_print "【1/2】是否解锁游戏帧率？（当前：$(show_onoff "$(get_conf FPS_UNLOCK)")）"
-ui_print "  [音量+]  开启：温控档 fps 统一 144，刷新率不再锁 60/90"
-ui_print "  [音量-]  关闭：完全不碰这两个系统文件"
-ui_print "  （10 秒内不按 = 保持当前设置）"
+ui_print "两个开关，各自独立；不按键 = 保持当前设置"
+ui_print " "
+ui_print "【1/2】游戏帧率解锁（现在：$(show_onoff "$(get_conf FPS_UNLOCK)")）"
+ui_print "  音量+ 开 · 音量- 关"
+ui_print "  开 = 游戏 fps 144、刷新率不锁"
 sel=$(read_vol)
 case "$sel" in
   up|down)
     [ "$sel" = up ] && FPSV=1 || FPSV=0
     set_conf FPS_UNLOCK "$FPSV"
     set_conf RATE_UNLOCK "$FPSV"
-    ui_print "  → 游戏帧率解锁：$(show_onoff "$FPSV")"
+    ui_print "  → $(show_onoff "$FPSV")"
     ;;
   *)
-    ui_print "  → 游戏帧率解锁：保持当前设置（$(show_onoff "$(get_conf FPS_UNLOCK)")）"
+    ui_print "  → 保持（$(show_onoff "$(get_conf FPS_UNLOCK)")）"
     ;;
 esac
 
 ui_print " "
 TUN=$(get_conf THERMAL_UNLOCK)
-ui_print "【2/2】是否启用温度墙解锁 + 冷却设备直控？（当前：$(show_onoff "$TUN")）"
-ui_print "  [音量+]  开启：10 个 CPU 核 trip 抬到 97℃，并禁止 cpu-cluster 降频"
-ui_print "           代价：芯片会真跑到 96℃ 左右，长期用加速电池老化"
-ui_print "  [音量-]  关闭：保留内核原始降频行为"
-ui_print "  （10 秒内不按 = 保持当前设置）"
+ui_print "【2/2】温度墙+冷却直控（现在：$(show_onoff "$TUN")）"
+ui_print "  音量+ 开 · 音量- 关"
+ui_print "  开 = 重载不降频；芯片可到 96℃，更费电"
 sel=$(read_vol)
 case "$sel" in
   up)
     set_conf THERMAL_UNLOCK 1
     set_conf CDEV_UNLOCK 1
-    ui_print "  → 温度墙/冷却直控：开启（电池 52.0℃ 或结温 96℃ 自动交回内核）"
+    ui_print "  → 开"
     ;;
   down)
     set_conf THERMAL_UNLOCK 0
     set_conf CDEV_UNLOCK 0
-    ui_print "  → 温度墙/冷却直控：关闭"
+    ui_print "  → 关"
     ;;
   *)
-    ui_print "  → 温度墙/冷却直控：保持当前设置（$(show_onoff "$TUN")）"
+    ui_print "  → 保持（$(show_onoff "$TUN")）"
     ;;
 esac
-
-# 管理器卡片只认 module.prop 的 description，那里是静态文案；
-# 按刚才的选择（以及保留下来的旧配置）重写一句「当前：…」，别让卡片和实际状态打架
 sh "$MP/bin/desc.sh" 2>/dev/null
 
 chmod 0755 "$MP/bin/genie.sh" "$MP/bin/desc.sh" "$MP/service.sh" "$MP/action.sh" "$MP/uninstall.sh" "$MP/customize.sh" "$MP/post-fs-data.sh" 2>/dev/null
@@ -117,20 +113,11 @@ chmod 0755 "$MP/logs" "$MP/work" 2>/dev/null
 rm -rf /data/local/tmp/.thermal_genie.lock 2>/dev/null
 
 ui_print " "
-ui_print "- 壳温诱骗：电池 ≥35.0℃ 时把壳温上报为 37.0℃"
-ui_print "- 充电解锁：充电且 ≥30.0℃ 时保持 cool_down=0（不限功率）"
-ui_print "- 安全护栏：电池 52.0℃ 停写 / 47.0℃ 恢复（充电与非充电同阈值）"
-ui_print "- 触发时上报 max(50.0℃, 电池+8.0℃)，交回内核按真实温度接管"
-ui_print "- 自动记录：充电功率（每秒）、每次充电汇总、每次待机汇总、降频事件"
-ui_print "  日志：/data/adb/modules/thermal_genie/logs/"
-ui_print "  - charging.log  每次充电的时长/峰值/均值/最高温"
-ui_print "  - standby.log   每次待机的时长/掉电速率/唤醒源"
-ui_print "  - telemetry-YYYYMMDD.log  按天的完整采样"
-ui_print "- 配置：/data/adb/modules/thermal_genie/config.conf（改完 10 秒生效）"
-ui_print "- 温度墙解锁：CPU 结温 92→97℃、sys-therm 88/90→93/95℃（config.conf 的 THERMAL_UNLOCK）"
-ui_print "- 冷却设备直控：电池 <52℃ 时禁止 cpu-cluster 降频（config.conf 的 CDEV_UNLOCK）"
-ui_print "- 这两项重启后会被内核复位，模块在开机时重新写入"
-ui_print "- 以上开关都可以装完之后改 config.conf，不用重装"
-ui_print "- 卸载即恢复原状：只写 sysfs 或做运行时挂载，不改写固件文件"
-ui_print "- 重启后生效"
+ui_print "默认：电池 ≥35℃ 时报壳温 37℃"
+ui_print "      充电 ≥30℃ 时不限功率"
+ui_print "护栏：电池 52℃ 停写、47℃ 恢复"
+ui_print "日志：/data/adb/modules/thermal_genie/logs/"
+ui_print "配置：同目录 config.conf，改完 10 秒生效"
+ui_print "卸载即恢复原状"
+ui_print "重启后生效（帧率补丁要开机才挂上）"
 exit 0
