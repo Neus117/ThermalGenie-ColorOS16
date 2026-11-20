@@ -67,41 +67,43 @@ drain_vol() {
 ui_print " "
 ui_print "两个开关，各自独立；不按键 = 保持当前设置"
 ui_print " "
-ui_print "【1/2】游戏帧率解锁（现在：$(show_onoff "$(get_conf FPS_UNLOCK)")）"
-ui_print "  音量+ 开 · 音量- 关"
-ui_print "  开 = 游戏 fps 144、刷新率不锁"
+ui_print "【1/2】游戏帧率解锁（默认 $(show_onoff "$(get_conf FPS_UNLOCK)")）"
+ui_print "音量+ 开  |  音量- 关"
+ui_print "开：解锁游戏 fps=144"
+ui_print "关：保持默认限制"
 sel=$(read_vol)
 case "$sel" in
   up|down)
     [ "$sel" = up ] && FPSV=1 || FPSV=0
     set_conf FPS_UNLOCK "$FPSV"
     set_conf RATE_UNLOCK "$FPSV"
-    ui_print "  → $(show_onoff "$FPSV")"
+    ui_print "已选择：$(show_onoff "$FPSV")"
     ;;
   *)
-    ui_print "  → 保持（$(show_onoff "$(get_conf FPS_UNLOCK)")）"
+    ui_print "已选择：保持（$(show_onoff "$(get_conf FPS_UNLOCK)")）"
     ;;
 esac
 
 ui_print " "
 TUN=$(get_conf THERMAL_UNLOCK)
-ui_print "【2/2】温度墙+冷却直控（现在：$(show_onoff "$TUN")）"
-ui_print "  音量+ 开 · 音量- 关"
-ui_print "  开 = 重载不降频；芯片可到 96℃，更费电"
+ui_print "【2/2】修改温度墙与冷却直控（默认 $(show_onoff "$TUN")）"
+ui_print "音量+ 开  |  音量- 关"
+ui_print "开：CPU 最高可跑到 96°C"
+ui_print "关：保持默认限制"
 sel=$(read_vol)
 case "$sel" in
   up)
     set_conf THERMAL_UNLOCK 1
     set_conf CDEV_UNLOCK 1
-    ui_print "  → 开"
+    ui_print "已选择：开"
     ;;
   down)
     set_conf THERMAL_UNLOCK 0
     set_conf CDEV_UNLOCK 0
-    ui_print "  → 关"
+    ui_print "已选择：关"
     ;;
   *)
-    ui_print "  → 保持（$(show_onoff "$TUN")）"
+    ui_print "已选择：保持（$(show_onoff "$TUN")）"
     ;;
 esac
 sh "$MP/bin/desc.sh" 2>/dev/null
@@ -113,11 +115,17 @@ chmod 0755 "$MP/logs" "$MP/work" 2>/dev/null
 rm -rf /data/local/tmp/.thermal_genie.lock 2>/dev/null
 
 ui_print " "
-ui_print "默认：电池 ≥35℃ 时报壳温 37℃"
-ui_print "      充电 ≥30℃ 时不限功率"
-ui_print "护栏：电池 52℃ 停写、47℃ 恢复"
+ui_print "模块工作时："
+ui_print "电池 ≥35°C：把「手机壳温」上报成 37°C"
+ui_print "（系统按壳温决定要不要降频，就不提前降）"
+ui_print "充电中电池 ≥30°C：不再压低充电功率"
+ui_print " "
+ui_print "安全护栏："
+ui_print "电池 52°C：停止上述改写，交回系统处理"
+ui_print "降到 47°C：恢复上述改写"
+ui_print " "
 ui_print "日志：/data/adb/modules/thermal_genie/logs/"
-ui_print "配置：同目录 config.conf，改完 10 秒生效"
-ui_print "卸载即恢复原状"
-ui_print "重启后生效（帧率补丁要开机才挂上）"
+ui_print "配置：同目录 config.conf，改完 10 秒后生效"
+ui_print "刷入模块需重启生效（帧率补丁要开机才挂上）"
+ui_print "卸载即恢复原状，干净无残留"
 exit 0
