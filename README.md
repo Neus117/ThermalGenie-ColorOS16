@@ -60,6 +60,8 @@ pwsh -File .\build.ps1
 
 输出 `dist\Thermal-Genie-<version>.zip`，并打印条目、大小与 SHA256。版本号只有 `src\module.prop` 一个来源。
 
+打包后脚本会自检，不过就直接报错、不留坏包：**条目必须用 `/` 分隔**（Windows 的 `[ZipFile]::CreateFromDirectory` 会写 `\`，Android 上反斜杠会变成文件名的一部分，安装器解出来是 `bin\genie.sh` 这个文件，于是报「缺少 bin/genie.sh」），并且 8 个必需条目齐全。`powershell -File` 与 `pwsh -File` 都能跑。
+
 ## 安装
 
 1. 把 `dist\Thermal-Genie-*.zip` 传到手机
