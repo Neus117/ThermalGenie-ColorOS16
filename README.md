@@ -54,7 +54,7 @@ KernelSU / Magisk 模块，id `thermal_genie`。所有改动都是运行时写 s
 | `THERMAL_UNLOCK` / `THERMAL_DELTA` / `THERMAL_CAP` | `0` / `5000` / `97000` | 温度墙解锁，安装时可选 |
 | `CDEV_UNLOCK` / `CDEV_GUARD` | `0` / `520` | 冷却设备直控，与上一条同一个安装选项 |
 | `CDEV_EXTRA` | `1` | 除 `cpu-cluster*` 外，是否也钉住 `cpufreq-cpu0`/`cpufreq-cpu6`/`gpu`/`kgsl`/`display-fps` |
-| `FREQ_FLOOR` | `1` | 结温未越界时，把各 CPU 策略的 `scaling_max_freq` 补写到硬件上限 |
+| `FREQ_FLOOR` | `0` | 把各 CPU 策略的 `scaling_max_freq` 补写到硬件上限。**本机型实测无效**（用户态写不进该文件，见「已知限制」），默认关闭 |
 | `ADAPTIVE` / `STANDBY` / `TELEMETRY` / `TICK` / `CHARGE_SAMPLE` | `1` / `1` / `1` / `0.2` / `5` | 节拍、待机统计、遥测开关与采样密度 |
 | `SB_GAP_MIN` | `90` | 设备挂起超过这么久、醒来又没看到「熄屏」时，按电量差补记一条待机；`0` 关闭 |
 
@@ -112,6 +112,7 @@ KernelSU / Magisk 模块，id `thermal_genie`。所有改动都是运行时写 s
 - 帧率补丁开机约 10 秒后才生效；显示服务若在更早时候读了该表，本次开机可能不生效（未复现）。
 - 部分 `trip_point_*_temp` 会被系统周期性改回，靠守护进程复核补写。
 - **厂商 daemon 会直接写 `scaling_max_freq`**，不经过任何冷却设备。实测热场结束后 15~20 分钟内，`cpu7` 上限被压在 1.69GHz（硬件 4.32GHz）、`cpu0~5` 压在 2.4GHz，而所有冷却设备都是 0、结温只有 43~47℃。`FREQ_FLOOR=1` 就是补这条路。
+- **CPU 上限用户态改不了**：kprobe 实测 `store_scaling_max_freq` 25 秒零命中，`cpufreq_set_policy` 的调用者全是 `kworker`——上限由厂商 perf 驱动在内核里下发，档位表在 `/my_product/etc/extension/sys_game_manager_config.json` 的 `adp.cpu_level`（最高档也只有 2.47GHz）。GPU 相反，`kgsl/devfreq/max_freq` 可写，`GPU_MAX` 就是补这条路。
 - `display-fps` 被钉住时系统无法用降刷新率来散热，`CDEV_GUARD`/96℃ 两道闸之外不再有别的散热手段，叠加热风险要自己判断。
 - 熄屏时 `scaling_max_freq` 被压到 57~61% 是**省电策略**，不是温控。
 - 旧模块（murongruyan）的 `frozen`/`unfrozen` cgroup 方案在 ColorOS 16 上已空转，未采用。
