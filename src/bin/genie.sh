@@ -110,12 +110,33 @@ for z in "$CDIR"/thermal_zone*; do
     cpu-*|sys-therm-*) TZONES="$TZONES $z" ;;
   esac
 done
+# 要钉住的冷却设备：cpu-cluster* 永远钉；cpufreq-*/gpu/kgsl/display-fps 由 CDEV_EXTRA 控制
 CDEVS=""
 CDEVPATHS=""
+CDEV_LEGEND=""
 for c in "$CDIR"/cooling_device*; do
   t=$(cat "$c/type" 2>/dev/null)
-  case "$t" in *cluster*) CDEVS="$CDEVS $c|$t"; CDEVPATHS="$CDEVPATHS $c/cur_state" ;; esac
+  case "$t" in
+    cpu-cluster*) ;;
+    cpufreq-cpu*|gpu|kgsl|display-fps) [ "${CDEV_EXTRA:-1}" = 1 ] || continue ;;
+    *) continue ;;
+  esac
+  CDEVS="$CDEVS $c|$t"
+  CDEVPATHS="$CDEVPATHS $c/cur_state"
+  CDEV_LEGEND="$CDEV_LEGEND $(basename "$c" | sed 's/cooling_device//')=$t"
 done
+
+# 遥测用：全部会影响性能的冷却设备（只读，不钉）
+CDSURVEY=""
+for c in "$CDIR"/cooling_device*; do
+  t=$(cat "$c/type" 2>/dev/null)
+  case "$t" in
+    cpu-cluster*|cpufreq-cpu*|gpu|kgsl|display-fps|ddr-cdev|cpu-hotplug*|pause-cpu*|thermal-pause-*|ufs) CDSURVEY="$CDSURVEY $c/cur_state" ;;
+  esac
+done
+
+# CPU 策略目录：补写 scaling_max_freq 用（防厂商 daemon 直接压频）
+CPUFREQ_DIR=/sys/devices/system/cpu/cpufreq
 
 # ---- 单实例锁 ----
 LK=/data/local/tmp/.thermal_genie.lock
@@ -219,6 +240,32 @@ cdev_pin() {
     fi
   done
 }
+
+# 厂商 daemon 会直接写 scaling_max_freq（不经冷却设备），钉 cdev 堵不住这条路。
+# 结温未越界时，把各 CPU 策略的上限补写到硬件上限；越界（cd_hold）就让它按真实温度压。
+freq_floor() {
+  [ "${CDEV_UNLOCK:-0}" = 1 ] || return 0
+  [ "${FREQ_FLOOR:-1}" = 1 ] || return 0
+  [ "$cd_hold" = 1 ] && return 0
+  ff_n=0
+  for pd in "$CPUFREQ_DIR"/policy*; do
+    [ -d "$pd" ] || continue
+    fn="$pd/scaling_max_freq"
+    cur=$(cat "$fn" 2>/dev/null)
+    mx=$(cat "$pd/cpuinfo_max_freq" 2>/dev/null)
+    case "$cur" in ''|*[!0-9]*) continue ;; esac
+    case "$mx" in ''|*[!0-9]*) continue ;; esac
+    [ "$cur" -ge "$mx" ] && continue
+    echo "$mx" > "$fn" 2>/dev/null
+    nf=$(cat "$fn" 2>/dev/null)
+    [ "$nf" = "$mx" ] && ff_n=$((ff_n + 1))
+  done
+  if [ "$ff_n" -gt 0 ] && [ "${ff_last:-0}" = 0 ]; then
+    log "FREQ-FLOOR 补写 $ff_n 个策略上限（厂商在压频）"
+  fi
+  ff_last=$ff_n
+  return 0
+}
 own_ticks() { awk '{print $14+$15+$16+$17}' /proc/$$/stat 2>/dev/null || echo 0; }
 numv() { case "$1" in ''|*[!0-9]*) echo "" ;; *) echo "$1" ;; esac; }
 delta() {
@@ -251,6 +298,8 @@ WCOUNT=skip
 TOOL=0
 command -v timeout >/dev/null 2>&1 && TOOL=1
 log "CAPS wakeup_sources=$WKSRC suspend_stats=$SSTATS timeout=$TOOL note=no_wakeup_count"
+# 冷却设备编号->名字的对照表，只在启动时记一次，之后 CDS2 行只写编号
+[ -n "$CDEV_LEGEND" ] && log "CDSMAP pinned:$CDEV_LEGEND"
 
 log "start $VER pid=$$ tick=$TICK shell=$SHELL_SPOOF/$SHELL_MODE/$SHELL_TRIGGER charge=$CHARGE_SPOOF/$CHARGE_TRIGGER ab=$CHARGE_AB/$ab_mode guard=$GUARD_TRIGGER/$GUARD_RELEASE game=$GUARD_TRIGGER_GAME/$GUARD_RELEASE_GAME"
 
@@ -264,6 +313,7 @@ vbad=0; cdbad=0
 last_m7=""
 cd_pinned=0
 cd_hold=0
+ff_last=0
 sb_chg=0
 MODE=""
 sb_active=0; sb_start=0; sb_cap0=0; sb_sum=0; sb_n=0; sb_cpu0=0
@@ -539,7 +589,7 @@ guarded=0; guarded_mode=""
   fi
 
   if [ $((i % 30)) -eq 0 ]; then therm_fix; fi
-  if [ $((i % 5)) -eq 0 ]; then cdev_pin "$tb"; fi
+  if [ $((i % 5)) -eq 0 ]; then cdev_pin "$tb"; freq_floor; fi
 
   if [ "$TELEMETRY" = 1 ] && [ $((i % TELE_MOD)) -eq 0 ]; then
     wake=$(to dumpsys power 2>/dev/null | grep -m1 -o 'mWakefulness=[A-Za-z]*')
@@ -547,7 +597,9 @@ guarded=0; guarded_mode=""
     gpu=$(cat "$NGPU" 2>/dev/null); gmax=$(cat "$NGMAX" 2>/dev/null); gl=$(cat "$NGLOAD" 2>/dev/null)
     z2=$(cat "$ZCPU" 2>/dev/null); z22=$(cat "$ZCPUSS" 2>/dev/null); z75=$(cat "$ZPMIC" 2>/dev/null)
     cdsum=$(awk '{s+=$1} END{print s+0}' "$CDIR"/cooling_device*/cur_state 2>/dev/null)
-    echo "TEL $(date +%T) $wake st=$st cur=$(cat "$NCUR" 2>/dev/null) v=$(cat "$NVOL" 2>/dev/null) tb=$tb cd=$(cat "$NCD" 2>/dev/null) cdv=$cdbad sh=$(cat "$PS" 2>/dev/null) vbad=$vbad c4=$(cat "$NC4" 2>/dev/null) c7=$(cat "$NC7" 2>/dev/null) m0=$m0 m4=$m4 m7=$m7 gpu=$gpu gmax=$gmax gl=$gl cds=$cdsum z2=$z2 z22=$z22 z75=$z75 sp=$now g=$guarded_mode sb=$sb_active" >> "$TEL"
+    # 冷却设备归因：只记非零的，一行看清这次是哪几条通道在动
+    cdl=$(awk 'FNR==1{v[FILENAME]=$1} END{for(i=1;i<ARGC;i++){f=ARGV[i]; if(v[f]+0>0){n=f; sub(/.*cooling_device/,"",n); sub(/\/.*/,"",n); printf "cd%s=%s ", n, v[f]}}}' $CDSURVEY 2>/dev/null)
+    echo "TEL $(date +%T) $wake st=$st cur=$(cat "$NCUR" 2>/dev/null) v=$(cat "$NVOL" 2>/dev/null) tb=$tb cd=$(cat "$NCD" 2>/dev/null) cdv=$cdbad sh=$(cat "$PS" 2>/dev/null) vbad=$vbad c4=$(cat "$NC4" 2>/dev/null) c7=$(cat "$NC7" 2>/dev/null) m0=$m0 m4=$m4 m7=$m7 gpu=$gpu gmax=$gmax gl=$gl cds=$cdsum z2=$z2 z22=$z22 z75=$z75 sp=$now g=$guarded_mode sb=$sb_active cds2=${cdl:-none}" >> "$TEL"
     # 频率上限一变就立刻记一条，不依赖 5 秒采样的运气
     if [ -n "$m7" ] && [ "$m7" != "$last_m7" ]; then
       echo "THR $(date +%T) m7=$m7 tb=$tb z2=$z2 z22=$z22 z75=$z75 gpu=$gpu gmax=$gmax cds=$cdsum sh=$(cat "$PS" 2>/dev/null) sp=$now" >> "$TEL"

@@ -53,6 +53,8 @@ KernelSU / Magisk 模块，id `thermal_genie`。所有改动都是运行时写 s
 | `GUARD_VALUE_MIN` / `GUARD_OFFSET` | `50000` / `8000` | 护栏上报值 `max(50.0℃, 电池+8.0℃)`，封顶 60.0℃ |
 | `THERMAL_UNLOCK` / `THERMAL_DELTA` / `THERMAL_CAP` | `0` / `5000` / `98000` | 温度墙解锁，安装时可选 |
 | `CDEV_UNLOCK` / `CDEV_GUARD` | `0` / `520` | 冷却设备直控，与上一条同一个安装选项 |
+| `CDEV_EXTRA` | `1` | 除 `cpu-cluster*` 外，是否也钉住 `cpufreq-cpu0`/`cpufreq-cpu6`/`gpu`/`kgsl`/`display-fps` |
+| `FREQ_FLOOR` | `1` | 结温未越界时，把各 CPU 策略的 `scaling_max_freq` 补写到硬件上限 |
 | `ADAPTIVE` / `STANDBY` / `TELEMETRY` / `TICK` / `CHARGE_SAMPLE` | `1` / `1` / `1` / `0.2` / `5` | 节拍、待机统计、遥测开关与采样密度 |
 | `SB_GAP_MIN` | `90` | 设备挂起超过这么久、醒来又没看到「熄屏」时，按电量差补记一条待机；`0` 关闭 |
 
@@ -65,7 +67,8 @@ KernelSU / Magisk 模块，id `thermal_genie`。所有改动都是运行时写 s
 | 电池 ≥52.0℃ | 停止诱骗，上报 `max(50.0℃, 电池+8.0℃)`（封顶 60.0℃），交回内核 |
 | 降到 ≤47.0℃ | 恢复诱骗，并补写一次温度墙 |
 | `THERMAL_UNLOCK=1` | `cpu-*` / `sys-therm-*` 里 85.0~92.0℃ 的 trip 抬 +5.0℃（封顶 98.0℃），每 30 tick 复核补写 |
-| `CDEV_UNLOCK=1` | 电池 <52.0℃ 且结温 <96.0℃ 时把 `cpu-cluster*` 的 `cur_state` 钉 0；结温到 96.0℃ 立刻放手，回落到 91.0℃ 才重新接管（5℃ 回差） |
+| `CDEV_UNLOCK=1` | 电池 <52.0℃ 且结温 <96.0℃ 时把 `cpu-cluster*` 及（`CDEV_EXTRA=1` 时）`cpufreq-cpu0`/`cpufreq-cpu6`/`gpu`/`kgsl`/`display-fps` 的 `cur_state` 钉 0；结温到 96.0℃ 立刻放手，回落到 91.0℃ 才重新接管（5℃ 回差） |
+| `FREQ_FLOOR=1` | 同上条件下，把每个 CPU 策略的 `scaling_max_freq` 写回硬件上限——厂商 daemon 会绕过冷却设备直接写这个文件，只钉 cdev 堵不住；日志记 `FREQ-FLOOR` |
 
 ## 日志
 
@@ -74,7 +77,7 @@ KernelSU / Magisk 模块，id `thermal_genie`。所有改动都是运行时写 s
 | 文件 | 内容 |
 |---|---|
 | `genie.log` | 启动自检 `CAPS`、状态切换、护栏、心跳异常、充电起止、温度墙补写（`THERMAL-FIX`）、冷却直控（`CDEV-PIN` / `CDEV-HOLD` / `CDEV-RELEASE` / `CDEV-RESUME`） |
-| `telemetry-YYYYMMDD.log` | 按天：`TEL` 状态行约 5 秒一条，`CHG` 充电功率点约 1 秒一个，`CAL` 每次充电开始记原始读数，`THR` 频率上限一变就记 |
+| `telemetry-YYYYMMDD.log` | 按天：`TEL` 状态行约 5 秒一条，`CHG` 充电功率点约 1 秒一个，`CAL` 每次充电开始记原始读数，`THR` 频率上限一变就记，CDS2 行记下这一轮到底哪几个冷却设备非零（形如 cd8=3，编号对照见 genie.log 的 CDSMAP 行） |
 | `charging.log` | 每次充电一条汇总：时长 / 起止电量 / 峰值 / 均值 / 最大电流 / 最高温 / 护栏是否触发 |
 | `standby.log` | 每次待机一条汇总：`dur` 时长、`cap` 起止电量、`samples`、`sph`（每小时采样数，看深睡比例）、`avg`、`rate`（≥30 分钟才算）、`cpu`。行尾 `src=gap` 表示这条是按挂起时长补记的，`resume=1` 表示跨过一次守护进程重启 |
 | `standby-YYYYMMDD.log` | 每次待机结束一行 `WAKE`：按持锁时长排序的唤醒源 top5 |
@@ -108,6 +111,8 @@ KernelSU / Magisk 模块，id `thermal_genie`。所有改动都是运行时写 s
 - `/vendor/etc` 被 `mountify` 用 overlay 覆盖，`post-fs-data` 挂的补丁会被盖住，靠 `service.sh` 开机后 `cmp` 校验补挂。
 - 帧率补丁开机约 10 秒后才生效；显示服务若在更早时候读了该表，本次开机可能不生效（未复现）。
 - 部分 `trip_point_*_temp` 会被系统周期性改回，靠守护进程复核补写。
+- **厂商 daemon 会直接写 `scaling_max_freq`**，不经过任何冷却设备。实测热场结束后 15~20 分钟内，`cpu7` 上限被压在 1.69GHz（硬件 4.32GHz）、`cpu0~5` 压在 2.4GHz，而所有冷却设备都是 0、结温只有 43~47℃。`FREQ_FLOOR=1` 就是补这条路。
+- `display-fps` 被钉住时系统无法用降刷新率来散热，`CDEV_GUARD`/96℃ 两道闸之外不再有别的散热手段，叠加热风险要自己判断。
 - 熄屏时 `scaling_max_freq` 被压到 57~61% 是**省电策略**，不是温控。
 - 旧模块（murongruyan）的 `frozen`/`unfrozen` cgroup 方案在 ColorOS 16 上已空转，未采用。
 - 充电表改写（`CHARGE_TEMP_SHIFT`）在 v0.4 移除，当前版本不含。
