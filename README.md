@@ -111,8 +111,14 @@ KernelSU / Magisk 模块，id `thermal_genie`。所有改动都是运行时写 s
 - `/vendor/etc` 被 `mountify` 用 overlay 覆盖，`post-fs-data` 挂的补丁会被盖住，靠 `service.sh` 开机后 `cmp` 校验补挂。
 - 帧率补丁开机约 10 秒后才生效；显示服务若在更早时候读了该表，本次开机可能不生效（未复现）。
 - 部分 `trip_point_*_temp` 会被系统周期性改回，靠守护进程复核补写。
-- **厂商 daemon 会直接写 `scaling_max_freq`**，不经过任何冷却设备。实测热场结束后 15~20 分钟内，`cpu7` 上限被压在 1.69GHz（硬件 4.32GHz）、`cpu0~5` 压在 2.4GHz，而所有冷却设备都是 0、结温只有 43~47℃。`FREQ_FLOOR=1` 就是补这条路。
-- **CPU 上限用户态改不了**：kprobe 实测 `store_scaling_max_freq` 25 秒零命中，`cpufreq_set_policy` 的调用者全是 `kworker`——上限由厂商 perf 驱动在内核里下发，档位表在 `/my_product/etc/extension/sys_game_manager_config.json` 的 `adp.cpu_level`（最高档也只有 2.47GHz）。GPU 相反，`kgsl/devfreq/max_freq` 可写，`GPU_MAX` 就是补这条路。
+- **CPU 上限不是软件层能改的**（2026-11 在 PKR110 上实测三重证据）：
+  1. kprobe `store_scaling_max_freq` 采集 25 秒 **零命中** —— 用户态（含 root）写这个文件根本到不了 store，VFS 层就被拒；
+  2. 同一窗口 `cpufreq_set_policy` 的调用者全是 `kworker`（`process_scheduled_works` → `worker_thread`），没有用户态帧；
+  3. 上游是 `16430000.qcom,cpucp` —— 高通 **CPuCP（CPU Control Processor）固件**，走 SCMI 下发限制，内核只是把结果反映到 `scaling_max_freq`。
+
+  停用前的读数：结温 43~47℃、所有冷却设备为 0 时，`cpu7` 仍被压在 1.69GHz、`cpu0~5` 压在 2.4GHz。`FREQ_FLOOR` 这条补写在本机型无效，**默认关闭**。
+- **游戏内上限单独一套，也改不动**：把 `/my_product/etc/extension/sys_game_manager_config.json` 的 `adp.cpu_level` 8 档全换成满血（`3532800,4320000,3532800`）、`gpu_level` 全换 1100000000，bind-mount 生效后确认文件已替换：**非游戏场景上限回到 3.53/4.32GHz，但一进游戏立刻被压回 1.55~2.84GHz**（这些值不在改后的表里）。那张表本身最高档也只有 2.47GHz。
+- **GPU 是例外**：`kgsl/devfreq/max_freq` 可写且能保持（实测写 1100000000 后 6 秒不掉），`GPU_MAX` 补的就是这条；`thermal_pwrlevel` 写入会被拒。
 - `display-fps` 被钉住时系统无法用降刷新率来散热，`CDEV_GUARD`/96℃ 两道闸之外不再有别的散热手段，叠加热风险要自己判断。
 - 熄屏时 `scaling_max_freq` 被压到 57~61% 是**省电策略**，不是温控。
 - 旧模块（murongruyan）的 `frozen`/`unfrozen` cgroup 方案在 ColorOS 16 上已空转，未采用。
