@@ -24,6 +24,7 @@ setup() { # $1=CDEV_EXTRA  $2=循环轮数  $3=z2 温度
   mkcdev 34 kgsl                2
   mkcdev 35 panel0-backlight    100
   mkcdev 36 gpu                 4
+  mkdir -p $T/kgsl/devfreq; echo 734000000 > $T/kgsl/devfreq/max_freq
   mkpol() { p=$T/cpufreq/policy$1; mkdir -p "$p"; echo "$2" > "$p/scaling_max_freq"; echo "$3" > "$p/cpuinfo_max_freq"; }
   mkpol 0 2400000 3532800
   mkpol 6 1689600 4320000
@@ -31,6 +32,7 @@ setup() { # $1=CDEV_EXTRA  $2=循环轮数  $3=z2 温度
   echo "$3" > $T/z2; echo 25000 > $T/z22
   sed -e "s#^CDIR=.*#CDIR=$T/th#" \
       -e "s#^CPUFREQ_DIR=.*#CPUFREQ_DIR=$T/cpufreq#" \
+      -e "s#^KGSL=.*#KGSL=$T/kgsl#" \
       -e "s#^ZCPU=.*#ZCPU=$T/z2#" \
       -e "s#^ZCPUSS=.*#ZCPUSS=$T/z22#" \
       -e "s#^PS=/proc/shell-temp#PS=$T/ps#" \
@@ -47,7 +49,7 @@ setup() { # $1=CDEV_EXTRA  $2=循环轮数  $3=z2 温度
       "$SRC" > $T/bin/genie.sh
   printf '#!/bin/sh\necho "mWakefulness=Awake"\n' > $T/fakebin/dumpsys
   chmod +x $T/fakebin/dumpsys
-  printf 'TICK=0.2\nTELEMETRY=1\nADAPTIVE=0\nSTANDBY=0\nCHARGE_SAMPLE=1\nTHERMAL_UNLOCK=0\nCDEV_UNLOCK=1\nCDEV_GUARD=520\nCDEV_EXTRA=%s\nFREQ_FLOOR=1\n' "$1" > $T/config.conf
+  printf 'TICK=0.2\nTELEMETRY=1\nADAPTIVE=0\nSTANDBY=0\nCHARGE_SAMPLE=1\nTHERMAL_UNLOCK=0\nCDEV_UNLOCK=1\nCDEV_GUARD=520\nCDEV_EXTRA=%s\nFREQ_FLOOR=1\nGPU_MAX=1100000000\n' "$1" > $T/config.conf
   echo 330 > $T/tb; echo 5 > $T/cd; echo 30000 > $T/ps
   echo Discharging > $T/st; echo 500 > $T/cur; echo 4000000 > $T/vol
   echo 60 > $T/cap; : > $T/none; echo "3600.00 7200.00" > $T/uptime
@@ -75,6 +77,8 @@ ck "B 记了 FREQ-FLOOR"          'grep -q "FREQ-FLOOR 补写 2 个策略上限"
 ck "B 记了 CDSMAP 对照表"       'grep -q "CDSMAP pinned:.*cpufreq-cpu0" $T/logs/genie.log'
 ck "E 遥测有 CDS2 归因行"       'grep -q "cds2=" $T/logs/telemetry-*.log'
 ck "E 归因行只列非零（cd0=1）"  'grep -q "cds2=cd0=1" $T/logs/telemetry-*.log'
+ck "B GPU 上限补到 1100M"      '[ "$(cat $T/kgsl/devfreq/max_freq)" = 1100000000 ]'
+ck "B 记了 GPU-FLOOR"           'grep -q "GPU-FLOOR 补写 GPU 上限" $T/logs/genie.log'
 
 echo
 echo "===== C 结温 97℃：全部放手 ====="
@@ -84,6 +88,7 @@ grep -E "CDEV-|FREQ" $T/logs/genie.log | head -3
 ck "C cdev 没被钉（cpufreq-cpu0=3）" '[ "$(cat $T/th/cooling_device8/cur_state)" = 3 ]'
 ck "C cluster 也没被钉（=12）"       '[ "$(cat $T/th/cooling_device31/cur_state)" = 12 ]'
 ck "C 频率没被补写（=2400000）"      '[ "$(cat $T/cpufreq/policy0/scaling_max_freq)" = 2400000 ]'
+ck "C GPU 上限也没被补（=734M）"   '[ "$(cat $T/kgsl/devfreq/max_freq)" = 734000000 ]'
 ck "C 记了 CDEV-HOLD"                'grep -q "CDEV-HOLD" $T/logs/genie.log'
 
 echo

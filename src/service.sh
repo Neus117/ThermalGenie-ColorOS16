@@ -39,7 +39,7 @@ fix "$MD/work/refresh_rate_config.xml" /my_product/etc/refresh_rate_config.xml
 # ---- 温度墙解锁（可选，默认关闭；sysfs 写入重启即恢复）----
 THERMAL_UNLOCK=0
 THERMAL_DELTA=5000
-THERMAL_CAP=98000
+THERMAL_CAP=97000
 [ -f "$MD/config.conf" ] && . "$MD/config.conf"
 
 unlock_thermal() {
@@ -59,7 +59,7 @@ unlock_thermal() {
       i=$((i + 1))
       case "$v" in ''|*[!0-9]*) continue ;; esac
       # 只处理原始区间 85.0~92.0℃，改过的 93+ 不会重复抬高（幂等）
-      if [ "$v" -lt 85000 ] || [ "$v" -gt 92000 ]; then continue; fi
+      if [ "$v" -lt 85000 ] || [ "$v" -gt 96000 ]; then continue; fi
       nv=$((v + THERMAL_DELTA))
       [ "$nv" -gt "$THERMAL_CAP" ] && nv=$THERMAL_CAP
       echo "$nv" > "$f" 2>/dev/null

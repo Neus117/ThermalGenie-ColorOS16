@@ -51,7 +51,7 @@ KernelSU / Magisk 模块，id `thermal_genie`。所有改动都是运行时写 s
 | `GUARD_TRIGGER` / `GUARD_RELEASE` | `520` / `470` | 充电时的护栏（单位 0.1℃） |
 | `GUARD_TRIGGER_GAME` / `GUARD_RELEASE_GAME` | `520` / `470` | 非充电时的护栏 |
 | `GUARD_VALUE_MIN` / `GUARD_OFFSET` | `50000` / `8000` | 护栏上报值 `max(50.0℃, 电池+8.0℃)`，封顶 60.0℃ |
-| `THERMAL_UNLOCK` / `THERMAL_DELTA` / `THERMAL_CAP` | `0` / `5000` / `98000` | 温度墙解锁，安装时可选 |
+| `THERMAL_UNLOCK` / `THERMAL_DELTA` / `THERMAL_CAP` | `0` / `5000` / `97000` | 温度墙解锁，安装时可选 |
 | `CDEV_UNLOCK` / `CDEV_GUARD` | `0` / `520` | 冷却设备直控，与上一条同一个安装选项 |
 | `CDEV_EXTRA` | `1` | 除 `cpu-cluster*` 外，是否也钉住 `cpufreq-cpu0`/`cpufreq-cpu6`/`gpu`/`kgsl`/`display-fps` |
 | `FREQ_FLOOR` | `1` | 结温未越界时，把各 CPU 策略的 `scaling_max_freq` 补写到硬件上限 |
@@ -66,7 +66,7 @@ KernelSU / Magisk 模块，id `thermal_genie`。所有改动都是运行时写 s
 | 充电中电池 ≥30.0℃ 且未触护栏 | 持续把 `cool_down` 写成 0 |
 | 电池 ≥52.0℃ | 停止诱骗，上报 `max(50.0℃, 电池+8.0℃)`（封顶 60.0℃），交回内核 |
 | 降到 ≤47.0℃ | 恢复诱骗，并补写一次温度墙 |
-| `THERMAL_UNLOCK=1` | `cpu-*` / `sys-therm-*` 里 85.0~92.0℃ 的 trip 抬 +5.0℃（封顶 98.0℃），每 30 tick 复核补写 |
+| `THERMAL_UNLOCK=1` | `cpu-*` / `sys-therm-*` 里 **85.0~96.0℃** 的 trip 抬 +5.0℃（封顶 97.0℃），每 30 tick 复核补写。范围必须覆盖到 96℃，否则 `sys-therm` 的 93/95℃ 会先于 CPU 的 97℃ 触发，冷却设备照样压频 |
 | `CDEV_UNLOCK=1` | 电池 <52.0℃ 且结温 <96.0℃ 时把 `cpu-cluster*` 及（`CDEV_EXTRA=1` 时）`cpufreq-cpu0`/`cpufreq-cpu6`/`gpu`/`kgsl`/`display-fps` 的 `cur_state` 钉 0；结温到 96.0℃ 立刻放手，回落到 91.0℃ 才重新接管（5℃ 回差） |
 | `FREQ_FLOOR=1` | 同上条件下，把每个 CPU 策略的 `scaling_max_freq` 写回硬件上限——厂商 daemon 会绕过冷却设备直接写这个文件，只钉 cdev 堵不住；日志记 `FREQ-FLOOR` |
 

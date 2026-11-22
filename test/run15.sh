@@ -49,9 +49,9 @@ ck "A cur_state 保持原值 12"      '[ "$(cat $T/th/cooling_device31/cur_state
 
 echo
 echo "===== B 结温 97000 → 92000 → 90000，回差生效 ====="
-setup 90
+setup 120
 echo 97000 > $T/z2
-( sleep 2; echo 92000 > $T/z2; sleep 2; echo 90000 > $T/z2 ) &
+( while ! grep -q "CDEV-HOLD" $T/logs/genie.log 2>/dev/null; do sleep 0.2; done; echo 92000 > $T/z2; sleep 3; echo 90000 > $T/z2 ) &
 PATH=$T/fakebin:$PATH sh $T/bin/genie.sh 2>/dev/null
 wait
 grep -E "CDEV-" $T/logs/genie.log

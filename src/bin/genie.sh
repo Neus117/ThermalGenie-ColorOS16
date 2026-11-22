@@ -137,6 +137,7 @@ done
 
 # CPU 策略目录：补写 scaling_max_freq 用（防厂商 daemon 直接压频）
 CPUFREQ_DIR=/sys/devices/system/cpu/cpufreq
+KGSL=/sys/class/kgsl/kgsl-3d0
 
 # ---- 单实例锁 ----
 LK=/data/local/tmp/.thermal_genie.lock
@@ -173,9 +174,9 @@ therm_fix() {
       tv=${pair#*=}
       case "$tf" in *trip_point_[0-7]_temp) ;; *) continue ;; esac
       case "$tv" in ''|*[!0-9]*) continue ;; esac
-      if [ "$tv" -lt 85000 ] || [ "$tv" -gt 92000 ]; then continue; fi
+      if [ "$tv" -lt 85000 ] || [ "$tv" -gt 96000 ]; then continue; fi
       tnv=$((tv + ${THERMAL_DELTA:-5000}))
-      [ "$tnv" -gt "${THERMAL_CAP:-98000}" ] && tnv=${THERMAL_CAP:-98000}
+      [ "$tnv" -gt "${THERMAL_CAP:-97000}" ] && tnv=${THERMAL_CAP:-97000}
       echo "$tnv" > "$tf" 2>/dev/null
       tn=$((tn + 1))
     done
@@ -260,6 +261,25 @@ freq_floor() {
     nf=$(cat "$fn" 2>/dev/null)
     [ "$nf" = "$mx" ] && ff_n=$((ff_n + 1))
   done
+  # GPU 上限：kgsl 的 devfreq/max_freq 写入能生效（实测能保持），CPU 的 scaling_max_freq 不行
+  gf_n=0
+  if [ "${GPU_MAX:-0}" -gt 0 ] && [ -f "$KGSL/devfreq/max_freq" ]; then
+    gcur=$(cat "$KGSL/devfreq/max_freq" 2>/dev/null)
+    case "$gcur" in
+      ''|*[!0-9]*) ;;
+      *)
+        if [ "$gcur" -lt "$GPU_MAX" ]; then
+          echo "$GPU_MAX" > "$KGSL/devfreq/max_freq" 2>/dev/null
+          gnf=$(cat "$KGSL/devfreq/max_freq" 2>/dev/null)
+          [ "$gnf" = "$GPU_MAX" ] && gf_n=1
+        fi
+        ;;
+    esac
+    if [ "$gf_n" = 1 ] && [ "${gf_last:-0}" = 0 ]; then
+      log "GPU-FLOOR 补写 GPU 上限到 $GPU_MAX（厂商在压频）"
+    fi
+    gf_last=$gf_n
+  fi
   if [ "$ff_n" -gt 0 ] && [ "${ff_last:-0}" = 0 ]; then
     log "FREQ-FLOOR 补写 $ff_n 个策略上限（厂商在压频）"
   fi

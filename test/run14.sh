@@ -20,6 +20,7 @@ mkzone() { # num type temp t0 t1 t2 t3 t9
 }
 mkzone 9  cpu-0-2-0   28000 92000 105000 118000 125000 90000
 mkzone 68 sys-therm-0 22000 125000 125000 88000  90000  90000
+mkzone 69 sys-therm-1 22000 93000  95000  96000  99000  90000
 mkzone 5  battery     30000 92000 92000 92000 92000 90000
 
 mkcdev() { # num type cur max
@@ -50,7 +51,7 @@ cat > $T/fakebin/dumpsys <<EOF
 echo "mWakefulness=Awake"
 EOF
 chmod +x $T/fakebin/dumpsys
-printf 'TICK=0.2\nTELEMETRY=0\nADAPTIVE=0\nSTANDBY=0\nCHARGE_SAMPLE=1\nTHERMAL_UNLOCK=1\nTHERMAL_DELTA=5000\nTHERMAL_CAP=98000\nCDEV_UNLOCK=1\nCDEV_GUARD=520\n' > $T/config.conf
+printf 'TICK=0.2\nTELEMETRY=0\nADAPTIVE=0\nSTANDBY=0\nCHARGE_SAMPLE=1\nTHERMAL_UNLOCK=1\nTHERMAL_DELTA=5000\nTHERMAL_CAP=97000\nCDEV_UNLOCK=1\nCDEV_GUARD=520\n' > $T/config.conf
 echo 330 > $T/tb; echo 5 > $T/cd; echo 30000 > $T/ps
 echo Discharging > $T/st; echo 500 > $T/cur; echo 4000000 > $T/vol
 echo 60 > $T/cap; : > $T/none; echo "3600.00 7200.00" > $T/uptime
@@ -62,6 +63,9 @@ ck "cpu-0-2-0 trip0 92000→97000"    '[ "$(cat $T/th/thermal_zone9/trip_point_0
 ck "sys-therm-0 trip2 88000→93000"  '[ "$(cat $T/th/thermal_zone68/trip_point_2_temp)" = 93000 ]'
 ck "sys-therm-0 trip3 90000→95000"  '[ "$(cat $T/th/thermal_zone68/trip_point_3_temp)" = 95000 ]'
 ck "trip_9 不被修改（90000）"        '[ "$(cat $T/th/thermal_zone9/trip_point_9_temp)" = 90000 ]'
+ck "93℃ trip 抬到封顶 97℃"          '[ "$(cat $T/th/thermal_zone69/trip_point_0_temp)" = 97000 ]'
+ck "96℃ trip 也抬到封顶 97℃"        '[ "$(cat $T/th/thermal_zone69/trip_point_2_temp)" = 97000 ]'
+ck "99℃ trip 超出范围不动"           '[ "$(cat $T/th/thermal_zone69/trip_point_3_temp)" = 99000 ]'
 ck "battery zone 不被修改"           '[ "$(cat $T/th/thermal_zone5/trip_point_0_temp)" = 92000 ]'
 ck "cpu-cluster0 12→0"               '[ "$(cat $T/th/cooling_device31/cur_state)" = 0 ]'
 ck "cpu-cluster1 保持 0"             '[ "$(cat $T/th/cooling_device32/cur_state)" = 0 ]'
